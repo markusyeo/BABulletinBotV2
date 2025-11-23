@@ -45,7 +45,7 @@ A Telegram bot that fetches the weekly Sunday Bulletin from the Bukit Arang Chur
 
 2.  **Run the bot:**
     ```bash
-    uv run main.py
+    uv run ./app/main.py
     ```
 
 ## Deploying with Docker
