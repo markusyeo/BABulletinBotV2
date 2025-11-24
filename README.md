@@ -48,33 +48,24 @@ A Telegram bot that fetches the weekly Sunday Bulletin from the Bukit Arang Chur
     uv run ./app/main.py
     ```
 
-## Deploying with Docker
+## Deploying with Docker Compose
 
-1.  **Build the Docker image:**
+1.  **Build and run the container:**
 
     ```bash
-    docker build -t babulletinbot .
+    docker-compose up -d --build
     ```
 
-2.  **Run the Docker container:**
-    Pass the environment variable directly or use the `.env` file.
-
-    **Option A: Using `.env` file (Recommended)**
+2.  **Verify it's running:**
 
     ```bash
-    docker run -d --name babulletinbot --env-file .env babulletinbot
+    docker-compose ps
+    docker-compose logs -f
     ```
 
-    **Option B: Passing token directly**
-
+3.  **Stop the bot:**
     ```bash
-    docker run -d --name babulletinbot -e TELEGRAM_BOT_TOKEN=your_token_here babulletinbot
-    ```
-
-3.  **Verify it's running:**
-    ```bash
-    docker ps
-    docker logs babulletinbot
+    docker-compose down
     ```
 
 ## Commands
