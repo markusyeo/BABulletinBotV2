@@ -5,7 +5,7 @@ from typing import Callable, Tuple
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from app.services.downloads import download_bulletin, download_songbook
+from app.services.downloads import download_songbook
 from app.services.drive import (
     download_outline,
     extract_pdf_link_from_google,

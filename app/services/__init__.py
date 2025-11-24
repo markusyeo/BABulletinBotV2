@@ -1,5 +1,5 @@
 from .linktree import fetch_linktree, find_bulletin_link, find_songbook_link
-from .downloads import download_bulletin, download_songbook
+from .downloads import download_songbook
 from .drive import (
     fetch_drive_folder,
     extract_outline_file_id,

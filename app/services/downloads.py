@@ -63,19 +63,3 @@ def download_songbook(url: str, cache_dir: str = "bulletin_cache") -> Tuple[str,
     filename = _resolve_filename(response, fallback_name)
     filepath = _persist_file(content, cache_dir, filename)
     return filepath, filename
-
-
-def download_bulletin(url: str, cache_dir: str = "bulletin_cache") -> Tuple[str, str]:
-    """Download the bulletin PDF and return (filepath, filename)."""
-    download_url = _derive_download_url(url)
-    LOGGER.info("Downloading bulletin from %s", download_url)
-
-    response = requests.get(download_url, headers=_headers(),
-                            allow_redirects=True, timeout=60)
-    response.raise_for_status()
-    content = response.content
-
-    fallback_name = f"bulletin.pdf"
-    filename = _resolve_filename(response, fallback_name)
-    filepath = _persist_file(content, cache_dir, filename)
-    return filepath, filename
