@@ -8,7 +8,6 @@ from bulletin import (
     download_bulletin,
     find_songbook_link,
     download_songbook,
-    LINKTREE_URL,
     fetch_drive_folder,
     extract_outline_file_id,
     download_outline
@@ -26,16 +25,19 @@ logger = logging.getLogger(__name__)
 FILE_ID_CACHE = {}
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    linktree_url = os.getenv("LINKTREE_URL", "")
+    linktree_text = f"\nVisit our Linktree: {linktree_url}" if linktree_url else ""
     await update.message.reply_text(
         f"Hi! I'm the Bukit Arang Bulletin Bot.\n"
         f"Use /bulletin to get the latest Sunday Bulletin.\n"
         f"Use /songbook to get the latest Songbook.\n"
         f"Use /outline for the Sermon Outline (PDF).\n"
-        f"Use /outline_doc for the Sermon Outline (DOCX).\n"
-        f"Visit our Linktree: {LINKTREE_URL}"
+        f"Use /outline_doc for the Sermon Outline (DOCX).{linktree_text}"
     )
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    linktree_url = os.getenv("LINKTREE_URL", "")
+    linktree_text = f"\nLinktree: {linktree_url}" if linktree_url else ""
     await update.message.reply_text(
         f"Available commands:\n"
         f"/start - Start the bot\n"
@@ -43,8 +45,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"/songbook - Download the latest Songbook\n"
         f"/outline - Download the Sermon Outline (PDF)\n"
         f"/outline_doc - Download the Sermon Outline (DOCX)\n"
-        f"/help - Show this help message\n"
-        f"Linktree: {LINKTREE_URL}"
+        f"/help - Show this help message{linktree_text}"
     )
 
 async def bulletin(update: Update, context: ContextTypes.DEFAULT_TYPE):
