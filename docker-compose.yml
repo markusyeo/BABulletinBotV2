@@ -1,0 +1,9 @@
+services:
+  bot:
+    build: .
+    container_name: babulletinbot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./bulletin_cache:/app/bulletin_cache
