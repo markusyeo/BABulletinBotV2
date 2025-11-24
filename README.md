@@ -4,11 +4,14 @@ A Telegram bot that fetches the weekly Sunday Bulletin from the Bukit Arang Chur
 
 ## Features
 
-- Fetches the latest "Sunday Bulletin" from [Linktree](REDACTED_LINKTREE_URL).
+- Fetches the latest "Sunday Bulletin" from Linktree.
+- Downloads Songbook PDFs from Linktree.
+- Retrieves Sermon Outlines (PDF and DOCX) from Google Drive folders.
 - Handles Google Drive links (converts view links to download links).
-- Caches the bulletin locally to avoid redundant downloads.
+- Caches files locally to avoid redundant downloads.
 - Validates cache using URL checksums.
-- Appends the Sunday date to the filename.
+- Appends the Sunday date to bulletin filenames.
+- File ID caching for faster re-sends on Telegram.
 
 ## Prerequisites
 
@@ -26,14 +29,21 @@ A Telegram bot that fetches the weekly Sunday Bulletin from the Bukit Arang Chur
     ```
 
 2.  **Environment Variables:**
-    Copy the example environment file and fill in your Telegram Bot Token.
+    Copy the example environment file and fill in the required values.
     ```bash
     cp .env.example .env
     ```
-    Open `.env` and set your token:
+    Open `.env` and set the following variables:
     ```
     TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
+    LINKTREE_URL=https://linktr.ee/your_linktree_username
+    OUTLINE_FOLDER_URL=https://drive.google.com/drive/folders/your_folder_id
     ```
+    
+    **Required Environment Variables:**
+    - `TELEGRAM_BOT_TOKEN`: Your Telegram bot token from [@BotFather](https://t.me/BotFather)
+    - `LINKTREE_URL`: The URL to your Linktree page (e.g., `https://linktr.ee/your_username`)
+    - `OUTLINE_FOLDER_URL`: The Google Drive folder URL containing sermon outlines (e.g., `https://drive.google.com/drive/folders/your_folder_id`)
 
 ## Running Locally
 
@@ -70,9 +80,12 @@ A Telegram bot that fetches the weekly Sunday Bulletin from the Bukit Arang Chur
 
 ## Commands
 
-- `/start`: Welcome message.
+- `/start`: Welcome message with bot information and Linktree link.
 - `/help`: Show available commands.
 - `/bulletin`: Download and receive the latest Sunday Bulletin.
+- `/songbook`: Download and receive the latest Songbook.
+- `/outline`: Download the Sermon Outline (PDF format).
+- `/outline_doc`: Download the Sermon Outline (DOCX format).
 
 ## Credits
 
