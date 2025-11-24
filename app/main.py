@@ -1,19 +1,24 @@
+from app.bot import start, help_command, bulletin, songbook, outline, outline_doc
+from telegram.ext import ApplicationBuilder, CommandHandler
+from dotenv import load_dotenv
 import logging
 import os
 import sys
-from dotenv import load_dotenv
-from telegram.ext import ApplicationBuilder, CommandHandler
-from bot import start, help_command, bulletin, songbook, outline, outline_doc
+from pathlib import Path
 
-# Load environment variables
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+
 load_dotenv()
 
-# Configure logging
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
+
 
 def main():
     token = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -21,7 +26,6 @@ def main():
         logger.error("TELEGRAM_BOT_TOKEN not found in environment variables.")
         return
 
-    # Configure request with higher timeouts for file uploads
     application = ApplicationBuilder().token(token).post_init(post_init).build()
 
     application.add_handler(CommandHandler("start", start))
@@ -32,6 +36,7 @@ def main():
     application.add_handler(CommandHandler("outline_doc", outline_doc))
 
     application.run_polling()
+
 
 async def post_init(application):
     """Sets the bot commands for autosuggestion."""

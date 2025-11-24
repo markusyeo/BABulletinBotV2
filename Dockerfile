@@ -19,5 +19,5 @@ RUN uv sync
 # Make port 80 available to the world outside this container (optional, not needed for polling bot)
 # EXPOSE 80
 
-# Run main.py when the container launches
-CMD ["uv", "run", "app/main.py"]
+# Run the application as a module so package imports resolve
+CMD ["uv", "run", "python", "-m", "app.main"]

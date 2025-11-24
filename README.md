@@ -30,17 +30,21 @@ A Telegram bot that fetches the weekly Sunday Bulletin from the Bukit Arang Chur
 
 2.  **Environment Variables:**
     Copy the example environment file and fill in the required values.
+
     ```bash
     cp .env.example .env
     ```
+
     Open `.env` and set the following variables:
+
     ```
     TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
     LINKTREE_URL=https://linktr.ee/your_linktree_username
     OUTLINE_FOLDER_URL=https://drive.google.com/drive/folders/your_folder_id
     ```
-    
+
     **Required Environment Variables:**
+
     - `TELEGRAM_BOT_TOKEN`: Your Telegram bot token from [@BotFather](https://t.me/BotFather)
     - `LINKTREE_URL`: The URL to your Linktree page (e.g., `https://linktr.ee/your_username`)
     - `OUTLINE_FOLDER_URL`: The Google Drive folder URL containing sermon outlines (e.g., `https://drive.google.com/drive/folders/your_folder_id`)
@@ -55,7 +59,7 @@ A Telegram bot that fetches the weekly Sunday Bulletin from the Bukit Arang Chur
 
 2.  **Run the bot:**
     ```bash
-    uv run ./app/main.py
+    uv run -m app.main
     ```
 
 ## Deploying with Docker Compose
@@ -86,7 +90,3 @@ A Telegram bot that fetches the weekly Sunday Bulletin from the Bukit Arang Chur
 - `/songbook`: Download and receive the latest Songbook.
 - `/outline`: Download the Sermon Outline (PDF format).
 - `/outline_doc`: Download the Sermon Outline (DOCX format).
-
-## Credits
-
-This project was built with [Antigravity](https://github.com/google-deepmind/antigravity).
