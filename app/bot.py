@@ -94,7 +94,7 @@ async def bulletin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if direct_link:
             await status_message.edit_text(STATUS_MESSAGE_SENDING)
             try:
-                await message.reply_text(f"bulletin: {direct_link}")
+                await message.reply_document(document=direct_link)
                 await status_message.delete()
                 return
             except Exception as e:
@@ -181,12 +181,11 @@ async def outline(update: Update, context: ContextTypes.DEFAULT_TYPE):
             direct_link = extract_pdf_link_from_google(view_url)
             if direct_link:
                 CACHE.set_direct_link(view_url, direct_link)
-                logger.info("Cached outline direct link: %s", direct_link)
 
         if direct_link:
             await status_message.edit_text(STATUS_MESSAGE_SENDING)
             try:
-                await message.reply_text(f"outline: {direct_link}")
+                await message.reply_document(document=direct_link)
                 await status_message.delete()
                 return
             except Exception as exc:
