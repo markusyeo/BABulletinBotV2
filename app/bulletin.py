@@ -2,6 +2,7 @@ import os
 import re
 import hashlib
 import logging
+import json
 from datetime import datetime, timedelta
 import requests
 from bs4 import BeautifulSoup
@@ -172,4 +173,102 @@ def download_songbook(url, cache_dir="bulletin_cache"):
 
     except Exception as e:
         logger.error(f"Failed to download songbook: {e}")
+        raise
+
+def fetch_drive_folder(url=None):
+    """Fetches the Drive folder page content."""
+    if url is None:
+        url = os.getenv("OUTLINE_FOLDER_URL")
+        if not url:
+            raise ValueError("OUTLINE_FOLDER_URL environment variable is not set")
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36"
+    }
+    response = requests.get(url, headers=headers)
+    response.raise_for_status()
+    return response.text
+
+def extract_outline_file_id(html_content, mime_type_fragment):
+    """
+    Extracts the file ID for a file with the given mime type fragment from the Drive folder HTML.
+    Parses the window['_DRIVE_ivd'] JSON data.
+    """
+    # Extract the JSON string from the HTML
+    match = re.search(r"window\['_DRIVE_ivd'\] = '([^']+)'", html_content)
+    if not match:
+        logger.error("Could not find _DRIVE_ivd in HTML")
+        return None
+    
+    encoded_json = match.group(1)
+    
+    # Decode hex escapes (e.g. \x5b -> [)
+    # We can use codecs.decode with 'unicode_escape' but we need to be careful with double backslashes
+    try:
+        decoded_json = encoded_json.encode('utf-8').decode('unicode_escape')
+        data = json.loads(decoded_json)
+        
+        # The data structure is a bit complex, usually a list of lists.
+        # We iterate through the items to find the matching mime type.
+        # Based on inspection: data[0] contains the file list.
+        # Each file entry: [id, parent_id, name, mime_type, ...]
+        
+        if not data or not isinstance(data, list) or not data[0]:
+             return None
+
+        for item in data[0]:
+            if len(item) > 3:
+                file_id = item[0]
+                f_mime = item[3]
+                if mime_type_fragment in f_mime:
+                    return file_id
+                    
+    except Exception as e:
+        logger.error(f"Error parsing Drive JSON: {e}")
+        return None
+        
+    return None
+
+def download_outline(file_id, filename_prefix="outline", cache_dir="bulletin_cache"):
+    """
+    Downloads a file from Google Drive by ID.
+    """
+    if not os.path.exists(cache_dir):
+        os.makedirs(cache_dir)
+        
+    download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+    logger.info(f"Downloading outline from: {download_url}")
+    
+    try:
+        response = requests.get(download_url, allow_redirects=True)
+        response.raise_for_status()
+        content = response.content
+        
+        # Try to get filename from Content-Disposition header
+        content_disposition = response.headers.get('content-disposition')
+        filename = None
+        if content_disposition:
+            fname_match = re.findall('filename="?([^"]+)"?', content_disposition)
+            if fname_match:
+                filename = fname_match[0]
+        
+        if not filename:
+            checksum = get_file_checksum(content)
+            filename = f"{filename_prefix}_{checksum}"
+
+        filepath = os.path.join(cache_dir, filename)
+
+        # Check if file already exists (and has same content - simplified by checking name if it has checksum, 
+        # but here we might get a static name from header. For now, just overwrite or check existence if we trust the name)
+        # If the name comes from the header, it might be "Isaiah...pdf". 
+        # If we want to cache effectively, we should probably use the file_id in the local filename or trust the content.
+        # For simplicity, let's just save it.
+        
+        with open(filepath, 'wb') as f:
+            f.write(content)
+            
+        logger.info(f"Downloaded and cached: {filepath}")
+        return filepath, filename
+
+    except Exception as e:
+        logger.error(f"Failed to download outline: {e}")
         raise
