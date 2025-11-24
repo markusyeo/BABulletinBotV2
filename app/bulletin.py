@@ -105,3 +105,71 @@ def download_bulletin(url, cache_dir="bulletin_cache"):
     except Exception as e:
         logger.error(f"Failed to download bulletin: {e}")
         raise
+
+def find_songbook_link(html_content):
+    """Parses HTML to find the 'Songbook' link."""
+    soup = BeautifulSoup(html_content, 'html.parser')
+    
+    # Look for text containing "Songbook"
+    for a_tag in soup.find_all('a'):
+        text = a_tag.get_text()
+        if "Songbook" in text:
+            link = a_tag.get('href')
+            return link
+    return None
+
+def download_songbook(url, cache_dir="bulletin_cache"):
+    """
+    Downloads the songbook from the given URL.
+    """
+    if not os.path.exists(cache_dir):
+        os.makedirs(cache_dir)
+
+    # Convert Google Drive View link to Download link if necessary
+    file_id_match = re.search(r'/file/d/([a-zA-Z0-9_-]+)', url)
+    download_url = url
+    if file_id_match:
+        file_id = file_id_match.group(1)
+        download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+
+    logger.info(f"Downloading songbook from: {download_url}")
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36"
+    }
+
+    try:
+        response = requests.get(download_url, headers=headers, allow_redirects=True)
+        response.raise_for_status()
+        content = response.content
+        
+        # Try to get filename from Content-Disposition header
+        content_disposition = response.headers.get('content-disposition')
+        filename = None
+        if content_disposition:
+            fname_match = re.findall('filename="?([^"]+)"?', content_disposition)
+            if fname_match:
+                filename = fname_match[0]
+        
+        if not filename:
+            # Fallback to generated name
+            checksum = get_file_checksum(content)
+            filename = f"songbook_{checksum}.pdf"
+
+        filepath = os.path.join(cache_dir, filename)
+
+        # Check if file already exists
+        if os.path.exists(filepath):
+            logger.info(f"File already exists in cache: {filepath}")
+            return filepath, filename
+
+        # Save new file
+        with open(filepath, 'wb') as f:
+            f.write(content)
+        
+        logger.info(f"Downloaded and cached: {filepath}")
+        return filepath, filename
+
+    except Exception as e:
+        logger.error(f"Failed to download songbook: {e}")
+        raise

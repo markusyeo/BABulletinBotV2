@@ -3,7 +3,7 @@ import os
 import sys
 from dotenv import load_dotenv
 from telegram.ext import ApplicationBuilder, CommandHandler
-from bot import start, help_command, bulletin
+from bot import start, help_command, bulletin, songbook
 
 # Load environment variables
 load_dotenv()
@@ -39,6 +39,7 @@ def main():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("bulletin", bulletin))
+    application.add_handler(CommandHandler("songbook", songbook))
 
     logger.info("Bot is starting...")
     application.run_polling()
@@ -48,6 +49,7 @@ async def post_init(application):
     from telegram import BotCommand
     commands = [
         BotCommand("bulletin", "Download the latest Sunday Bulletin"),
+        BotCommand("songbook", "Download the latest Songbook"),
         BotCommand("help", "Show available commands"),
         BotCommand("start", "Start the bot"),
     ]
