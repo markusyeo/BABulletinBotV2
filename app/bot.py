@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 # In a real production app, this should be persistent (DB or file).
 FILE_ID_CACHE = {}
 
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     linktree_url = os.getenv("LINKTREE_URL", "")
     linktree_text = f"\nVisit our Linktree: {linktree_url}" if linktree_url else ""
@@ -34,6 +35,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Use /outline for the Sermon Outline (PDF).\n"
         f"Use /outline_doc for the Sermon Outline (DOCX).{linktree_text}"
     )
+
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     linktree_url = os.getenv("LINKTREE_URL", "")
@@ -47,6 +49,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"/outline_doc - Download the Sermon Outline (DOCX)\n"
         f"/help - Show this help message{linktree_text}"
     )
+
 
 async def bulletin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Fetches and sends the bulletin PDF."""
@@ -80,13 +83,15 @@ async def bulletin(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Cache the file_id
             if message.document:
                 FILE_ID_CACHE[filename] = message.document.file_id
-                logger.info(f"Cached file_id for {filename}: {message.document.file_id}")
+                logger.info(
+                    f"Cached file_id for {filename}: {message.document.file_id}")
 
         await status_message.delete()
 
     except Exception as e:
         logger.error(f"Error in bulletin command: {e}")
         await status_message.edit_text("An error occurred while fetching the bulletin. Please try again later.")
+
 
 async def songbook(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Fetches and sends the songbook PDF."""
@@ -120,13 +125,15 @@ async def songbook(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Cache the file_id
             if message.document:
                 FILE_ID_CACHE[filename] = message.document.file_id
-                logger.info(f"Cached file_id for {filename}: {message.document.file_id}")
+                logger.info(
+                    f"Cached file_id for {filename}: {message.document.file_id}")
 
         await status_message.delete()
 
     except Exception as e:
         logger.error(f"Error in songbook command: {e}")
         await status_message.edit_text("An error occurred while fetching the songbook. Please try again later.")
+
 
 async def outline(update: Update, context: ContextTypes.DEFAULT_TYPE):
     status_message = await update.message.reply_text("Fetching the sermon outline (PDF)... please wait.")
@@ -142,7 +149,8 @@ async def outline(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         # 3. Download
-        filepath, filename = download_outline(file_id, filename_prefix="outline_pdf")
+        filepath, filename = download_outline(
+            file_id, filename_prefix="outline_pdf")
 
         # 4. Send File
         if filename in FILE_ID_CACHE:
@@ -163,6 +171,7 @@ async def outline(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Error in outline command: {e}")
         await status_message.edit_text("An error occurred while fetching the outline. Please try again later.")
 
+
 async def outline_doc(update: Update, context: ContextTypes.DEFAULT_TYPE):
     status_message = await update.message.reply_text("Fetching the sermon outline (DOCX)... please wait.")
 
@@ -181,7 +190,8 @@ async def outline_doc(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         # 3. Download
-        filepath, filename = download_outline(file_id, filename_prefix="outline_doc")
+        filepath, filename = download_outline(
+            file_id, filename_prefix="outline_doc")
 
         # 4. Send File
         if filename in FILE_ID_CACHE:
