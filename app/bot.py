@@ -69,8 +69,8 @@ async def bulletin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     STATUS_MESSAGE_FETCHING = "Fetching the latest bulletin... please wait."
-    STATUS_MESSAGE_SENDING = "Sending bulletin link..."
-    STATUS_MESSAGE_NOT_FOUND = "Sorry, I couldn't find the 'Sunday Bulletin' link."
+    STATUS_MESSAGE_SENDING = "Sending bulletin..."
+    STATUS_MESSAGE_NOT_FOUND = "Sorry, I couldn't find the 'Sunday Bulletin'."
     STATUS_MESSAGE_ERROR = "An error occurred while fetching the bulletin. Please try again later."
 
     status_message = await message.reply_text(STATUS_MESSAGE_FETCHING)
@@ -113,7 +113,7 @@ async def songbook(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     STATUS_MESSAGE_FETCHING = "Fetching the latest songbook..."
     STATUS_MESSAGE_SENDING = "Sending songbook..."
-    STATUS_MESSAGE_NOT_FOUND = "Sorry, I couldn't find the 'Songbook' link."
+    STATUS_MESSAGE_NOT_FOUND = "Sorry, I couldn't find the 'Songbook'."
     STATUS_MESSAGE_ERROR = "An error occurred while fetching the songbook. Please try again later."
 
     status_message = await message.reply_text(STATUS_MESSAGE_FETCHING)
@@ -159,8 +159,8 @@ async def outline(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     STATUS_MESSAGE_FETCHING = "Fetching the sermon outline (PDF)... please wait."
-    STATUS_MESSAGE_SENDING = "Sending outline link..."
-    STATUS_MESSAGE_NOT_FOUND = "Sorry, I couldn't find the PDF outline."
+    STATUS_MESSAGE_SENDING = "Sending sermon outline (PDF)..."
+    STATUS_MESSAGE_NOT_FOUND = "Sorry, I couldn't find the sermon outline (PDF)."
     STATUS_MESSAGE_ERROR = "An error occurred while fetching the outline. Please try again later."
 
     status_message = await message.reply_text(STATUS_MESSAGE_FETCHING)
@@ -203,8 +203,8 @@ async def outline_doc(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     STATUS_MESSAGE_FETCHING = "Fetching the sermon outline (DOC)... please wait."
-    STATUS_MESSAGE_SENDING = "Sending outline..."
-    STATUS_MEESSAGE_NOT_FOUND_ERROR = "Sorry, I could not find the outline(docx)."
+    STATUS_MESSAGE_SENDING = "Sending sermon outline (DOC)..."
+    STATUS_MEESSAGE_NOT_FOUND_ERROR = "Sorry, I could not find the sermon outline (DOC)."
     STATUS_MESSAGE_ERROR = "An error occurred while fetching the outline. Please try again later."
 
     status_message = await message.reply_text(STATUS_MESSAGE_FETCHING)
