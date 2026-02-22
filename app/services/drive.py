@@ -36,9 +36,9 @@ def _extract_viewer_url(drive_url: str) -> Optional[str]:
     response = requests.get(drive_url, headers=_headers(), timeout=60)
     response.raise_for_status()
     match = re.search(
-        r"(https://drive\.google\.com/viewerng/upload[^\"]+)", response.text)
+        r"(https://drive\.google\.com/viewer/upload[^\"]+)", response.text)
     if not match:
-        LOGGER.warning("Could not find viewerng URL in Drive HTML")
+        LOGGER.warning("Could not find viewer URL in Drive HTML")
         return None
     return match.group(1)
 
