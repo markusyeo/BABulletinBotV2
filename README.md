@@ -86,7 +86,10 @@ A Telegram bot that fetches the weekly Sunday Bulletin from the Bukit Arang Chur
 
 - `/start`: Welcome message with bot information and Linktree link.
 - `/help`: Show available commands.
-- `/bulletin`: Download and receive the latest Sunday Bulletin.
+- `/bulletin_830_1045`: Download and receive the latest 8.30/10.45am Gathering Bulletin.
+- `/bulletin_2pm`: Download and receive the latest 2pm Gathering Bulletin.
+
+  > **Note:** For the next two weeks, the bulletin is split into two separate Linktree entries (`8.30/10.45am Gathering Bulletin` and `2pm Gathering Bulletin`), so each gets its own command. Future refactor: move bulletin sources to DB entries (one row per gathering/service) so commands can be generated dynamically instead of hardcoded link-text matching.
 - `/songbook`: Download and receive the latest Songbook.
 - `/outline`: Download the Sermon Outline (PDF format).
 - `/outline_doc`: Download the Sermon Outline (DOCX format).
