@@ -46,6 +46,16 @@ def find_bulletin_link(html_content: str) -> Optional[str]:
     return _find_link_by_text(html_content, "Sunday Bulletin")
 
 
+def find_bulletin_morning_link(html_content: str) -> Optional[str]:
+    """Locate the 8.30/10.45am Gathering Bulletin link inside the Linktree HTML."""
+    return _find_link_by_text(html_content, "8.30/10.45am Gathering Bulletin")
+
+
+def find_bulletin_2pm_link(html_content: str) -> Optional[str]:
+    """Locate the 2pm Gathering Bulletin link inside the Linktree HTML."""
+    return _find_link_by_text(html_content, "2pm Gathering Bulletin")
+
+
 def find_songbook_link(html_content: str) -> Optional[str]:
     """Locate the Songbook link inside the Linktree HTML."""
     return _find_link_by_text(html_content, "Songbook")
