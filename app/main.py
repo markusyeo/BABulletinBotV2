@@ -1,4 +1,12 @@
-from app.bot import start, help_command, bulletin, songbook, outline, outline_doc
+from app.bot import (
+    start,
+    help_command,
+    bulletin_morning,
+    bulletin_2pm,
+    songbook,
+    outline,
+    outline_doc,
+)
 from telegram.ext import ApplicationBuilder, CommandHandler
 from dotenv import load_dotenv
 import logging
@@ -30,7 +38,8 @@ def main():
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CommandHandler("bulletin", bulletin))
+    application.add_handler(CommandHandler("bulletin_830_1045", bulletin_morning))
+    application.add_handler(CommandHandler("bulletin_2pm", bulletin_2pm))
     application.add_handler(CommandHandler("songbook", songbook))
     application.add_handler(CommandHandler("outline", outline))
     application.add_handler(CommandHandler("outline_doc", outline_doc))
@@ -42,7 +51,8 @@ async def post_init(application):
     """Sets the bot commands for autosuggestion."""
     from telegram import BotCommand
     commands = [
-        BotCommand("bulletin", "Download the latest Sunday Bulletin"),
+        BotCommand("bulletin_830_1045", "Download the 8.30/10.45am Gathering Bulletin"),
+        BotCommand("bulletin_2pm", "Download the 2pm Gathering Bulletin"),
         BotCommand("songbook", "Download the latest Songbook"),
         BotCommand("outline", "Download the Sermon Outline (PDF)"),
         BotCommand("outline_doc", "Download the Sermon Outline (DOCX)"),

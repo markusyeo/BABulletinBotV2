@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import Callable, Tuple
+from typing import Callable, Optional, Tuple
 
 from telegram import Update
 from telegram.ext import ContextTypes
@@ -12,7 +12,12 @@ from app.services.drive import (
     extract_outline_file_id,
     fetch_drive_folder,
 )
-from app.services.linktree import fetch_linktree, find_bulletin_link, find_songbook_link
+from app.services.linktree import (
+    fetch_linktree,
+    find_bulletin_2pm_link,
+    find_bulletin_morning_link,
+    find_songbook_link,
+)
 from app.services.cache import CACHE
 
 logging.basicConfig(
@@ -38,7 +43,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     linktree_text = f"\nVisit our Linktree: {linktree_url}" if linktree_url else ""
     await message.reply_text(
         text=f"Hi! I'm the Bukit Arang Bulletin Bot.\n"
-        f"Use /bulletin to get the latest Sunday Bulletin.\n"
+        f"Use /bulletin_830_1045 for the 8.30/10.45am Gathering Bulletin.\n"
+        f"Use /bulletin_2pm for the 2pm Gathering Bulletin.\n"
         f"Use /songbook to get the latest Songbook.\n"
         f"Use /outline for the Sermon Outline (PDF).\n"
         f"Use /outline_doc for the Sermon Outline (DOCX).{linktree_text}"
@@ -55,7 +61,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await message.reply_text(
         f"Available commands:\n"
         f"/start - Start the bot\n"
-        f"/bulletin - Download the latest Sunday Bulletin\n"
+        f"/bulletin_830_1045 - Download the 8.30/10.45am Gathering Bulletin\n"
+        f"/bulletin_2pm - Download the 2pm Gathering Bulletin\n"
         f"/songbook - Download the latest Songbook\n"
         f"/outline - Download the Sermon Outline (PDF)\n"
         f"/outline_doc - Download the Sermon Outline (DOCX)\n"
@@ -63,22 +70,26 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-async def bulletin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def _send_bulletin(
+    update: Update,
+    link_finder: Callable[[str], Optional[str]],
+    label: str,
+):
     message = _get_message(update)
     if message is None:
         return
 
-    STATUS_MESSAGE_FETCHING = "Fetching the latest bulletin... please wait."
-    STATUS_MESSAGE_SENDING = "Sending bulletin..."
-    STATUS_MESSAGE_NOT_FOUND = "Sorry, I couldn't find the 'Sunday Bulletin'."
-    STATUS_MESSAGE_ERROR = "An error occurred while fetching the bulletin. Please try again later."
+    STATUS_MESSAGE_FETCHING = f"Fetching the latest {label} bulletin... please wait."
+    STATUS_MESSAGE_SENDING = f"Sending {label} bulletin..."
+    STATUS_MESSAGE_NOT_FOUND = f"Sorry, I couldn't find the '{label} Gathering Bulletin'."
+    STATUS_MESSAGE_ERROR = f"An error occurred while fetching the {label} bulletin. Please try again later."
 
     status_message = await message.reply_text(STATUS_MESSAGE_FETCHING)
 
     try:
         html = fetch_linktree()
 
-        link = find_bulletin_link(html)
+        link = link_finder(html)
         if not link:
             await status_message.edit_text(STATUS_MESSAGE_NOT_FOUND)
             return
@@ -102,8 +113,16 @@ async def bulletin(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await status_message.edit_text(STATUS_MESSAGE_ERROR)
 
     except Exception as e:
-        logger.error(f"Error in bulletin_new command: {e}")
+        logger.error(f"Error in {label} bulletin command: {e}")
         await status_message.edit_text(STATUS_MESSAGE_ERROR)
+
+
+async def bulletin_morning(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await _send_bulletin(update, find_bulletin_morning_link, "8.30/10.45am")
+
+
+async def bulletin_2pm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await _send_bulletin(update, find_bulletin_2pm_link, "2pm")
 
 
 async def songbook(update: Update, context: ContextTypes.DEFAULT_TYPE):
