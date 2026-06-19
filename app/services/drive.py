@@ -6,19 +6,12 @@ import re
 from typing import Optional, Tuple
 
 import requests
+from tenacity import retry, stop_after_attempt, wait_fixed
 
-from app.utils.common import ensure_dir, get_file_checksum
+from app.utils.common import ensure_dir, get_file_checksum, resolve_filename, CACHE_DIR
+from app.utils.http import http_headers
 
 LOGGER = logging.getLogger(__name__)
-USER_AGENT = (
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/91.0.4472.114 Safari/537.36"
-)
-
-
-def _headers():
-    return {"User-Agent": USER_AGENT}
 
 
 def clean_google_drive_link(raw_url: str) -> str:
@@ -32,8 +25,9 @@ def clean_google_drive_link(raw_url: str) -> str:
     return cleaned.strip('"').strip("'")
 
 
+@retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
 def _extract_viewer_url(drive_url: str) -> Optional[str]:
-    response = requests.get(drive_url, headers=_headers(), timeout=60)
+    response = requests.get(drive_url, headers=http_headers(), timeout=60)
     response.raise_for_status()
     match = re.search(
         r"(https://drive\.google\.com/viewer/upload[^\"]+)", response.text)
@@ -43,8 +37,9 @@ def _extract_viewer_url(drive_url: str) -> Optional[str]:
     return match.group(1)
 
 
+@retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
 def _extract_pdf_link_from_viewer(viewer_url: str) -> Optional[str]:
-    response = requests.get(viewer_url, headers=_headers(), timeout=60)
+    response = requests.get(viewer_url, headers=http_headers(), timeout=60)
     response.raise_for_status()
     content = response.text
     if content.startswith(")]}'"):
@@ -82,6 +77,7 @@ def extract_drive_file_id(drive_url: str) -> Optional[str]:
     return None
 
 
+@retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
 def fetch_drive_folder(url: Optional[str] = None) -> str:
     if url is None:
         url = os.getenv("OUTLINE_FOLDER_URL")
@@ -89,7 +85,7 @@ def fetch_drive_folder(url: Optional[str] = None) -> str:
             raise ValueError(
                 "OUTLINE_FOLDER_URL environment variable is not set")
 
-    response = requests.get(url, headers=_headers(), timeout=60)
+    response = requests.get(url, headers=http_headers(), timeout=60)
     response.raise_for_status()
     return response.text
 
@@ -113,32 +109,23 @@ def extract_outline_file_id(html_content: str, mime_type_fragment: str) -> Optio
         return None
 
     for item in data[0]:
+        # item[0] = file id, item[3] = mime type
         if len(item) > 3 and mime_type_fragment in item[3]:
             return item[0]
     return None
 
 
-def _resolve_drive_filename(response: requests.Response, filename_prefix: str, content: bytes) -> str:
-    """Resolve filename from content-disposition or build checksum-based fallback."""
-    header = response.headers.get("content-disposition")
-    if header:
-        match = re.findall(r'filename="?([^"]+)"?', header)
-        if match:
-            return match[0]
-
-    checksum = get_file_checksum(content)
-    return f"{filename_prefix}_{checksum}"
-
-
-def download_outline(file_id: str, filename_prefix: str = "outline", cache_dir: str = "bulletin_cache") -> Tuple[str, str]:
+@retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
+def download_outline(file_id: str, filename_prefix: str = "outline", cache_dir: str = CACHE_DIR) -> Tuple[str, str]:
     ensure_dir(cache_dir)
     download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
 
-    response = requests.get(download_url, allow_redirects=True, timeout=60)
+    response = requests.get(download_url, headers=http_headers(), allow_redirects=True, timeout=60)
     response.raise_for_status()
     content = response.content
 
-    filename = _resolve_drive_filename(response, filename_prefix, content)
+    checksum_fallback = f"{filename_prefix}_{get_file_checksum(content)}"
+    filename = resolve_filename(response, checksum_fallback)
 
     filepath = os.path.join(cache_dir, filename)
     with open(filepath, "wb") as destination:

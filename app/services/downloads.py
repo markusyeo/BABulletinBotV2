@@ -4,19 +4,12 @@ import re
 from typing import Tuple
 
 import requests
+from tenacity import retry, stop_after_attempt, wait_fixed
 
-from app.utils.common import ensure_dir
+from app.utils.common import ensure_dir, resolve_filename, CACHE_DIR
+from app.utils.http import http_headers
 
 LOGGER = logging.getLogger(__name__)
-USER_AGENT = (
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/91.0.4472.114 Safari/537.36"
-)
-
-
-def _headers():
-    return {"User-Agent": USER_AGENT}
 
 
 def _derive_download_url(view_url: str) -> str:
@@ -40,26 +33,17 @@ def _persist_file(content: bytes, cache_dir: str, filename: str) -> str:
     return filepath
 
 
-def _resolve_filename(response: requests.Response, fallback: str) -> str:
-    header = response.headers.get("content-disposition")
-    if header:
-        match = re.findall(r'filename="?([^"]+)"?', header)
-        if match:
-            return match[0]
-    return fallback
-
-
-def download_songbook(url: str, cache_dir: str = "bulletin_cache") -> Tuple[str, str]:
+@retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
+def download_songbook(url: str, cache_dir: str = CACHE_DIR) -> Tuple[str, str]:
     """Download the songbook PDF and return (filepath, filename)."""
     download_url = _derive_download_url(url)
     LOGGER.info("Downloading songbook from %s", download_url)
 
-    response = requests.get(download_url, headers=_headers(),
+    response = requests.get(download_url, headers=http_headers(),
                             allow_redirects=True, timeout=60)
     response.raise_for_status()
     content = response.content
 
-    fallback_name = f"songbook.pdf"
-    filename = _resolve_filename(response, fallback_name)
+    filename = resolve_filename(response, "songbook.pdf")
     filepath = _persist_file(content, cache_dir, filename)
     return filepath, filename
