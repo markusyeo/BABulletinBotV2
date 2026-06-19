@@ -2,6 +2,7 @@ import logging
 import os
 import re
 import asyncio
+import time
 from dataclasses import dataclass
 from typing import Optional
 from urllib.parse import urlparse
@@ -73,17 +74,34 @@ def resolve_final_url(url: str) -> str:
         return url
 
 
+_linktree_cache: Optional[tuple[str, float]] = None
+_LINKTREE_TTL = 300.0
+
+
 @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
-def fetch_linktree(url: Optional[str] = None) -> str:
-    """Fetch and return the Linktree HTML."""
+def _fetch_linktree_http(url: str) -> str:
+    response = requests.get(url, headers=http_headers(), timeout=30)
+    response.raise_for_status()
+    return response.text
+
+
+def fetch_linktree(url: Optional[str] = None, force: bool = False) -> str:
+    """Fetch and return the Linktree HTML, cached for 5 minutes unless force=True."""
+    global _linktree_cache
+    now = time.monotonic()
+    if not force and _linktree_cache is not None:
+        html, ts = _linktree_cache
+        if now - ts < _LINKTREE_TTL:
+            return html
+
     if url is None:
         url = os.getenv("LINKTREE_URL")
         if not url:
             raise ValueError("LINKTREE_URL environment variable is not set")
 
-    response = requests.get(url, headers=http_headers(), timeout=30)
-    response.raise_for_status()
-    return response.text
+    html = _fetch_linktree_http(url)
+    _linktree_cache = (html, now)
+    return html
 
 
 def find_drive_links(html_content: str) -> list[DriveLink]:

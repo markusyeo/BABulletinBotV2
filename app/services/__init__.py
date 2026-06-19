@@ -19,8 +19,14 @@ from .drive import (
     clean_google_drive_link,
 )
 from .cache import CacheStore, CACHE
+from .fetch import Document, resolve_drive_document, resolve_outline_pdf, resolve_outline_doc, resolve_songbook
 
 __all__ = [
+    "Document",
+    "resolve_drive_document",
+    "resolve_outline_pdf",
+    "resolve_outline_doc",
+    "resolve_songbook",
     "fetch_linktree",
     "DriveLink",
     "find_bulletin_links",

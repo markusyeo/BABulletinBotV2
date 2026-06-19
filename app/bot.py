@@ -5,21 +5,15 @@ import os
 from telegram import BotCommand, Update
 from telegram.ext import CommandHandler, ContextTypes
 
-from app.services.downloads import download_songbook
-from app.services.drive import (
-    download_outline,
-    extract_drive_file_id,
-    extract_pdf_link_from_google,
-    extract_outline_file_id,
-    fetch_drive_folder,
-)
-from app.services.linktree import (
-    DriveLink,
-    fetch_linktree,
-    find_drive_links_async,
-    find_songbook_link,
-)
 from app.services.cache import CACHE
+from app.services.fetch import (
+    Document,
+    resolve_drive_document,
+    resolve_outline_doc,
+    resolve_outline_pdf,
+    resolve_songbook,
+)
+from app.services.linktree import DriveLink, fetch_linktree, find_drive_links_async
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -97,7 +91,7 @@ def _format_drive_link_commands(context: ContextTypes.DEFAULT_TYPE) -> str:
 
 async def refresh_drive_link_commands(application) -> list[DriveLink]:
     """Fetch Linktree, rebuild Drive file commands, and update Telegram suggestions."""
-    html = await asyncio.to_thread(fetch_linktree)
+    html = await asyncio.to_thread(fetch_linktree, force=True)
     reserved_commands = {command.command for command in STATIC_COMMANDS}
     drive_links = [
         link for link in await find_drive_links_async(html)
@@ -148,9 +142,7 @@ async def refresh(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if message is None:
         return
 
-    status_message = await message.reply_text(
-        "Refreshing file commands from Linktree..."
-    )
+    status_message = await message.reply_text("Refreshing file commands from Linktree...")
     try:
         drive_links = await refresh_drive_link_commands(context.application)
         if not drive_links:
@@ -197,57 +189,24 @@ async def _send_drive_link(update: Update, drive_link: DriveLink):
     if message is None:
         return
 
-    status_message = await message.reply_text(
-        f"Fetching {drive_link.label}... please wait."
-    )
+    status_message = await message.reply_text(f"Fetching {drive_link.label}... please wait.")
     try:
-        file_id = extract_drive_file_id(drive_link.url)
-        if file_id:
-            cached_drive_file_id = CACHE.get_file_id_for_drive_id(file_id)
-            if cached_drive_file_id:
-                await status_message.edit_text(f"Sending {drive_link.label}...")
-                await message.reply_document(document=cached_drive_file_id)
-                await status_message.delete()
-                return
-
-        direct_link = CACHE.get_direct_link(drive_link.url)
-        if not direct_link:
-            logger.info("Direct link not in cache, extracting for %s", drive_link.url)
-            direct_link = await asyncio.to_thread(
-                extract_pdf_link_from_google,
-                drive_link.url,
-            )
-            if direct_link:
-                CACHE.set_direct_link(drive_link.url, direct_link)
-
-        if direct_link:
-            await status_message.edit_text(f"Sending {drive_link.label}...")
-            await message.reply_document(document=direct_link)
-            await status_message.delete()
-            return
-
-        if not file_id:
+        doc = await resolve_drive_document(drive_link, CACHE)
+        if not doc.found:
             await status_message.edit_text(
                 f"Sorry, I couldn't prepare '{drive_link.label}' for download."
             )
             return
 
-        filepath, filename = await asyncio.to_thread(
-            download_outline,
-            file_id,
-            filename_prefix=drive_link.command,
-        )
         await status_message.edit_text(f"Sending {drive_link.label}...")
-        with open(filepath, "rb") as file_handle:
-            sent_message = await message.reply_document(
-                document=file_handle,
-                filename=filename,
-            )
-
-        if sent_message.document:
-            CACHE.set_file_id_for_drive_id(file_id, sent_message.document.file_id)
-            CACHE.set_file_id_for_url(drive_link.url, sent_message.document.file_id)
-
+        if doc.telegram_ref:
+            await message.reply_document(document=doc.telegram_ref)
+        elif doc.filepath:
+            with open(doc.filepath, "rb") as fh:
+                sent = await message.reply_document(document=fh, filename=doc.filename)
+            if sent.document and doc.drive_file_id:
+                CACHE.set_file_id_for_drive_id(doc.drive_file_id, sent.document.file_id)
+                CACHE.set_file_id_for_url(drive_link.url, sent.document.file_id)
         await status_message.delete()
     except Exception as exc:
         logger.error("Error sending dynamic file '%s': %s", drive_link.label, exc)
@@ -261,46 +220,28 @@ async def songbook(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if message is None:
         return
 
-    STATUS_MESSAGE_FETCHING = "Fetching the latest songbook..."
-    STATUS_MESSAGE_SENDING = "Sending songbook..."
-    STATUS_MESSAGE_NOT_FOUND = "Sorry, I couldn't find the 'Songbook'."
-    STATUS_MESSAGE_ERROR = "An error occurred while fetching the songbook. Please try again later."
-
-    status_message = await message.reply_text(STATUS_MESSAGE_FETCHING)
-
+    status_message = await message.reply_text("Fetching the latest songbook...")
     try:
-        html = await asyncio.to_thread(fetch_linktree)
-
-        link = find_songbook_link(html)
-        if not link:
-            await status_message.edit_text(STATUS_MESSAGE_NOT_FOUND)
+        doc = await resolve_songbook(CACHE)
+        if not doc.found:
+            await status_message.edit_text("Sorry, I couldn't find the 'Songbook'.")
             return
 
-        cached_file_id = CACHE.get_file_id_for_url(link)
-        if cached_file_id:
-            await status_message.edit_text(STATUS_MESSAGE_SENDING)
-            await message.reply_document(document=cached_file_id)
-            await status_message.delete()
-            return
-
-        filepath, filename = await asyncio.to_thread(download_songbook, link)
-
-        await status_message.edit_text(STATUS_MESSAGE_SENDING)
-        with open(filepath, "rb") as file_handle:
-            sent_message = await message.reply_document(
-                document=file_handle,
-                filename=filename,
-            )
-
-        if sent_message.document:
-            CACHE.set_file_id_for_name(filename, sent_message.document.file_id)
-            CACHE.set_file_id_for_url(link, sent_message.document.file_id)
-
+        await status_message.edit_text("Sending songbook...")
+        if doc.telegram_ref:
+            await message.reply_document(document=doc.telegram_ref)
+        elif doc.filepath:
+            with open(doc.filepath, "rb") as fh:
+                sent = await message.reply_document(document=fh, filename=doc.filename)
+            if sent.document and doc.source_url:
+                CACHE.set_file_id_for_name(doc.filename, sent.document.file_id)
+                CACHE.set_file_id_for_url(doc.source_url, sent.document.file_id)
         await status_message.delete()
-
     except Exception as exc:
-        logger.error(f"Error in songbook command: {exc}")
-        await status_message.edit_text(STATUS_MESSAGE_ERROR)
+        logger.error("Error in songbook command: %s", exc)
+        await status_message.edit_text(
+            "An error occurred while fetching the songbook. Please try again later."
+        )
 
 
 async def outline(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -308,46 +249,27 @@ async def outline(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if message is None:
         return
 
-    STATUS_MESSAGE_FETCHING = "Fetching the sermon outline (PDF)... please wait."
-    STATUS_MESSAGE_SENDING = "Sending sermon outline (PDF)..."
-    STATUS_MESSAGE_NOT_FOUND = "Sorry, I couldn't find the sermon outline (PDF)."
-    STATUS_MESSAGE_ERROR = "An error occurred while fetching the outline. Please try again later."
-
-    status_message = await message.reply_text(STATUS_MESSAGE_FETCHING)
-
+    status_message = await message.reply_text("Fetching the sermon outline (PDF)... please wait.")
     try:
-        html = await asyncio.to_thread(fetch_drive_folder)
-
-        file_id = extract_outline_file_id(html, "application/pdf")
-        if not file_id:
-            await status_message.edit_text(STATUS_MESSAGE_NOT_FOUND)
+        doc = await resolve_outline_pdf(CACHE)
+        if not doc.found:
+            await status_message.edit_text("Sorry, I couldn't find the sermon outline (PDF).")
             return
 
-        view_url = f"https://drive.google.com/file/d/{file_id}/view?usp=sharing"
-        direct_link = CACHE.get_direct_link(view_url)
-        if not direct_link:
-            logger.info(
-                "Outline direct link not cached, extracting for %s", view_url)
-            direct_link = await asyncio.to_thread(
-                extract_pdf_link_from_google,
-                view_url,
+        await status_message.edit_text("Sending sermon outline (PDF)...")
+        try:
+            await message.reply_document(document=doc.telegram_ref)
+            await status_message.delete()
+        except Exception as exc:
+            logger.error("Failed to send outline link: %s", exc)
+            await status_message.edit_text(
+                "An error occurred while fetching the outline. Please try again later."
             )
-            if direct_link:
-                CACHE.set_direct_link(view_url, direct_link)
-
-        if direct_link:
-            await status_message.edit_text(STATUS_MESSAGE_SENDING)
-            try:
-                await message.reply_document(document=direct_link)
-                await status_message.delete()
-                return
-            except Exception as exc:
-                logger.error("Failed to send outline link: %s", exc)
-                await status_message.edit_text(STATUS_MESSAGE_ERROR)
-
-    except Exception as e:
-        logger.error(f"Error in outline command: {e}")
-        await status_message.edit_text(STATUS_MESSAGE_ERROR)
+    except Exception as exc:
+        logger.error("Error in outline command: %s", exc)
+        await status_message.edit_text(
+            "An error occurred while fetching the outline. Please try again later."
+        )
 
 
 async def outline_doc(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -355,51 +277,25 @@ async def outline_doc(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if message is None:
         return
 
-    STATUS_MESSAGE_FETCHING = "Fetching the sermon outline (DOC)... please wait."
-    STATUS_MESSAGE_SENDING = "Sending sermon outline (DOC)..."
-    STATUS_MEESSAGE_NOT_FOUND_ERROR = "Sorry, I could not find the sermon outline (DOC)."
-    STATUS_MESSAGE_ERROR = "An error occurred while fetching the outline. Please try again later."
-
-    status_message = await message.reply_text(STATUS_MESSAGE_FETCHING)
-
+    status_message = await message.reply_text("Fetching the sermon outline (DOC)... please wait.")
     try:
-        html = await asyncio.to_thread(fetch_drive_folder)
-
-        file_id = extract_outline_file_id(html, "wordprocessingml")
-        if not file_id:
-            # Try msword just in case
-            file_id = extract_outline_file_id(html, "msword")
-
-        if not file_id:
-            await status_message.edit_text(STATUS_MEESSAGE_NOT_FOUND_ERROR)
+        doc = await resolve_outline_doc(CACHE)
+        if not doc.found:
+            await status_message.edit_text("Sorry, I could not find the sermon outline (DOC).")
             return
 
-        cached_drive_file_id = CACHE.get_file_id_for_drive_id(file_id)
-        if cached_drive_file_id:
-            logger.info("Using cached file_id for Drive id %s", file_id)
-            await status_message.edit_text(STATUS_MESSAGE_SENDING)
-            await message.reply_document(document=cached_drive_file_id)
-            await status_message.delete()
-            return
-
-        filepath, filename = await asyncio.to_thread(
-            download_outline,
-            file_id,
-            filename_prefix="outline_doc",
-        )
-
-        await status_message.edit_text(STATUS_MESSAGE_SENDING)
-        with open(filepath, 'rb') as file_handle:
-            sent_message = await message.reply_document(document=file_handle, filename=filename)
-
-        if sent_message.document:
-            CACHE.set_file_id_for_name(
-                filename, sent_message.document.file_id)
-            CACHE.set_file_id_for_drive_id(
-                file_id, sent_message.document.file_id)
-
+        await status_message.edit_text("Sending sermon outline (DOC)...")
+        if doc.telegram_ref:
+            await message.reply_document(document=doc.telegram_ref)
+        elif doc.filepath:
+            with open(doc.filepath, "rb") as fh:
+                sent = await message.reply_document(document=fh, filename=doc.filename)
+            if sent.document and doc.drive_file_id:
+                CACHE.set_file_id_for_name(doc.filename, sent.document.file_id)
+                CACHE.set_file_id_for_drive_id(doc.drive_file_id, sent.document.file_id)
         await status_message.delete()
-
-    except Exception as e:
-        logger.error(f"Error in outline_doc command: {e}")
-        await status_message.edit_text(STATUS_MESSAGE_ERROR)
+    except Exception as exc:
+        logger.error("Error in outline_doc command: %s", exc)
+        await status_message.edit_text(
+            "An error occurred while fetching the outline. Please try again later."
+        )
