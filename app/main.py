@@ -1,11 +1,12 @@
 from app.bot import (
     start,
     help_command,
-    bulletin_morning,
-    bulletin_2pm,
     songbook,
     outline,
     outline_doc,
+    refresh,
+    refresh_drive_link_commands,
+    set_bot_commands,
 )
 from telegram.ext import ApplicationBuilder, CommandHandler
 from dotenv import load_dotenv
@@ -38,8 +39,7 @@ def main():
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CommandHandler("bulletin_830_1045", bulletin_morning))
-    application.add_handler(CommandHandler("bulletin_2pm", bulletin_2pm))
+    application.add_handler(CommandHandler("refresh", refresh))
     application.add_handler(CommandHandler("songbook", songbook))
     application.add_handler(CommandHandler("outline", outline))
     application.add_handler(CommandHandler("outline_doc", outline_doc))
@@ -49,17 +49,11 @@ def main():
 
 async def post_init(application):
     """Sets the bot commands for autosuggestion."""
-    from telegram import BotCommand
-    commands = [
-        BotCommand("bulletin_830_1045", "Download the 8.30/10.45am Gathering Bulletin"),
-        BotCommand("bulletin_2pm", "Download the 2pm Gathering Bulletin"),
-        BotCommand("songbook", "Download the latest Songbook"),
-        BotCommand("outline", "Download the Sermon Outline (PDF)"),
-        BotCommand("outline_doc", "Download the Sermon Outline (DOCX)"),
-        BotCommand("help", "Show available commands"),
-        BotCommand("start", "Start the bot"),
-    ]
-    await application.bot.set_my_commands(commands)
+    try:
+        await refresh_drive_link_commands(application)
+    except Exception as exc:
+        logger.error("Failed to refresh file commands during startup: %s", exc)
+        await set_bot_commands(application)
 
 
 if __name__ == '__main__':

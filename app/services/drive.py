@@ -69,6 +69,19 @@ def extract_pdf_link_from_google(drive_url: str) -> Optional[str]:
         return None
 
 
+def extract_drive_file_id(drive_url: str) -> Optional[str]:
+    """Extract a Google Drive file id from common file URL formats."""
+    patterns = [
+        r"/file/d/([a-zA-Z0-9_-]+)",
+        r"[?&]id=([a-zA-Z0-9_-]+)",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, drive_url)
+        if match:
+            return match.group(1)
+    return None
+
+
 def fetch_drive_folder(url: Optional[str] = None) -> str:
     if url is None:
         url = os.getenv("OUTLINE_FOLDER_URL")

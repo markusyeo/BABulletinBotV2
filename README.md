@@ -4,7 +4,9 @@ A Telegram bot that fetches the weekly Sunday Bulletin from the Bukit Arang Chur
 
 ## Features
 
-- Fetches the latest "Sunday Bulletin" from Linktree.
+- Refreshes file commands dynamically from Linktree.
+- Resolves Linktree redirects concurrently during refresh for faster command updates.
+- Resolves short URLs such as `tiny.cc` before checking for Google Drive files.
 - Downloads Songbook PDFs from Linktree.
 - Retrieves Sermon Outlines (PDF and DOCX) from Google Drive folders.
 - Handles Google Drive links (converts view links to download links).
@@ -86,10 +88,10 @@ A Telegram bot that fetches the weekly Sunday Bulletin from the Bukit Arang Chur
 
 - `/start`: Welcome message with bot information and Linktree link.
 - `/help`: Show available commands.
-- `/bulletin_830_1045`: Download and receive the latest 8.30/10.45am Gathering Bulletin.
-- `/bulletin_2pm`: Download and receive the latest 2pm Gathering Bulletin.
-
-  > **Note:** For the next two weeks, the bulletin is split into two separate Linktree entries (`8.30/10.45am Gathering Bulletin` and `2pm Gathering Bulletin`), so each gets its own command. Future refactor: move bulletin sources to DB entries (one row per gathering/service) so commands can be generated dynamically instead of hardcoded link-text matching.
+- `/refresh`: Re-scrape Linktree, resolve every page link to its final URL, and rebuild commands for Google Drive-backed files.
+- `/bulletin`: Download the latest Sunday Bulletin when Linktree has one shared bulletin.
+- `/bulletin_830_1045`: Download the latest 8.30/10.45am Gathering Bulletin when Linktree has a split bulletin.
+- `/bulletin_2pm`: Download the latest 2pm Gathering Bulletin when Linktree has a split bulletin.
 - `/songbook`: Download and receive the latest Songbook.
 - `/outline`: Download the Sermon Outline (PDF format).
 - `/outline_doc`: Download the Sermon Outline (DOCX format).
