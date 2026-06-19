@@ -1,0 +1,9 @@
+.git
+.venv
+.env
+.env.example
+bulletin_cache
+__pycache__
+*.pyc
+*.pyo
+README.md
