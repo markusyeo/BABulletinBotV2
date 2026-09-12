@@ -6,6 +6,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from telegram.ext import (
     ApplicationBuilder,
+    CallbackQueryHandler,
     CommandHandler,
     ContextTypes,
     PersistenceInput,
@@ -26,6 +27,7 @@ from app.bot import (  # noqa: E402
     songbook,
     start,
 )
+from app.ebook_flow import CALLBACK_PATTERN, ebook_callback, ebook_command  # noqa: E402
 from app.scheduler import schedule_auto_refresh  # noqa: E402
 from app.utils.common import CACHE_DIR, ensure_dir  # noqa: E402
 
@@ -46,7 +48,8 @@ def main():
         return
 
     ensure_dir(CACHE_DIR)
-    # Only user_data is persisted; bot_data carries live handler objects and must stay in memory.
+    # Only user_data is persisted: it holds each user's remembered e-reader.
+    # bot_data carries live handler objects and must stay in memory.
     persistence = PicklePersistence(
         filepath=os.path.join(CACHE_DIR, "bot_state.pickle"),
         store_data=PersistenceInput(bot_data=False, chat_data=False, user_data=True, callback_data=False),
@@ -65,6 +68,8 @@ def main():
     application.add_handler(CommandHandler("songbook", songbook))
     application.add_handler(CommandHandler("outline", outline))
     application.add_handler(CommandHandler("outline_doc", outline_doc))
+    application.add_handler(CommandHandler("ebook", ebook_command))
+    application.add_handler(CallbackQueryHandler(ebook_callback, pattern=CALLBACK_PATTERN))
     application.add_error_handler(log_error)
 
     schedule_auto_refresh(application)

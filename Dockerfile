@@ -14,7 +14,7 @@ COPY . /app
 RUN pip install uv
 
 # Sync dependencies
-RUN uv sync
+RUN uv sync --no-dev
 
 # Make port 80 available to the world outside this container (optional, not needed for polling bot)
 # EXPOSE 80

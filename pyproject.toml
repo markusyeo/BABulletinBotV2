@@ -6,8 +6,15 @@ readme = "README.md"
 requires-python = ">=3.10.12"
 dependencies = [
     "beautifulsoup4>=4.14.2",
+    "mammoth>=1.12.2",
+    "pymupdf>=1.28.2",
     "python-dotenv>=1.2.1",
-    "python-telegram-bot>=22.5",
+    "python-telegram-bot[job-queue]>=22.5",
     "requests>=2.32.5",
     "tenacity>=9.1.2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
 ]

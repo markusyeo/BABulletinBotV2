@@ -5,6 +5,7 @@ import os
 from telegram import BotCommand, Update
 from telegram.ext import CommandHandler, ContextTypes
 
+from app.ebook_flow import ebook_button
 from app.services.cache import CACHE
 from app.services.fetch import (
     Document,
@@ -14,6 +15,7 @@ from app.services.fetch import (
     resolve_songbook,
 )
 from app.services.linktree import DriveLink, fetch_linktree, find_drive_links_async
+from app.services.sources import drive_source_id
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -28,6 +30,7 @@ STATIC_COMMANDS = [
     BotCommand("songbook", "Download the latest Songbook"),
     BotCommand("outline", "Download the Sermon Outline (PDF)"),
     BotCommand("outline_doc", "Download the Sermon Outline (DOCX)"),
+    BotCommand("ebook", "Get a file as EPUB/KEPUB for your e-reader"),
     BotCommand("help", "Show available commands"),
     BotCommand("start", "Start the bot"),
 ]
@@ -52,7 +55,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Use /refresh to fetch the latest file commands.\n"
         f"Use /songbook to get the latest Songbook.\n"
         f"Use /outline for the Sermon Outline (PDF).\n"
-        f"Use /outline_doc for the Sermon Outline (DOCX).{linktree_text}"
+        f"Use /outline_doc for the Sermon Outline (DOCX).\n"
+        f"Use /ebook to get any of these as EPUB/KEPUB for a Kobo or other e-reader.{linktree_text}"
     )
 
 
@@ -72,6 +76,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"/songbook - Download the latest Songbook\n"
         f"/outline - Download the Sermon Outline (PDF)\n"
         f"/outline_doc - Download the Sermon Outline (DOCX)\n"
+        f"/ebook - Get a file as EPUB/KEPUB for your e-reader\n"
         f"/help - Show this help message{linktree_text}"
     )
 
@@ -201,11 +206,12 @@ async def _send_drive_link(update: Update, drive_link: DriveLink):
             return
 
         await status_message.edit_text(f"Sending {drive_link.label}...")
+        markup = ebook_button(drive_source_id(drive_link.command))
         if doc.telegram_ref:
-            await message.reply_document(document=doc.telegram_ref)
+            await message.reply_document(document=doc.telegram_ref, reply_markup=markup)
         elif doc.filepath:
             with open(doc.filepath, "rb") as fh:
-                sent = await message.reply_document(document=fh, filename=doc.filename)
+                sent = await message.reply_document(document=fh, filename=doc.filename, reply_markup=markup)
             if sent.document and doc.drive_file_id:
                 CACHE.set_file_id_for_drive_id(doc.drive_file_id, sent.document.file_id)
                 CACHE.set_file_id_for_url(drive_link.url, sent.document.file_id)
@@ -230,11 +236,12 @@ async def songbook(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         await status_message.edit_text("Sending songbook...")
+        markup = ebook_button("songbook")
         if doc.telegram_ref:
-            await message.reply_document(document=doc.telegram_ref)
+            await message.reply_document(document=doc.telegram_ref, reply_markup=markup)
         elif doc.filepath:
             with open(doc.filepath, "rb") as fh:
-                sent = await message.reply_document(document=fh, filename=doc.filename)
+                sent = await message.reply_document(document=fh, filename=doc.filename, reply_markup=markup)
             if sent.document and doc.source_url:
                 CACHE.set_file_id_for_name(doc.filename, sent.document.file_id)
                 CACHE.set_file_id_for_url(doc.source_url, sent.document.file_id)
@@ -260,7 +267,7 @@ async def outline(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await status_message.edit_text("Sending sermon outline (PDF)...")
         try:
-            await message.reply_document(document=doc.telegram_ref)
+            await message.reply_document(document=doc.telegram_ref, reply_markup=ebook_button("outline_pdf"))
             await status_message.delete()
         except Exception as exc:
             logger.error("Failed to send outline link: %s", exc)
@@ -287,11 +294,12 @@ async def outline_doc(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         await status_message.edit_text("Sending sermon outline (DOC)...")
+        markup = ebook_button("outline_doc")
         if doc.telegram_ref:
-            await message.reply_document(document=doc.telegram_ref)
+            await message.reply_document(document=doc.telegram_ref, reply_markup=markup)
         elif doc.filepath:
             with open(doc.filepath, "rb") as fh:
-                sent = await message.reply_document(document=fh, filename=doc.filename)
+                sent = await message.reply_document(document=fh, filename=doc.filename, reply_markup=markup)
             if sent.document and doc.drive_file_id:
                 CACHE.set_file_id_for_name(doc.filename, sent.document.file_id)
                 CACHE.set_file_id_for_drive_id(doc.drive_file_id, sent.document.file_id)
