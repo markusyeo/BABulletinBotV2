@@ -62,28 +62,99 @@ class _Line:
         self.text, self.html = text, html
 
 
+SUPERSCRIPT_RATIO = 0.75      # a span this much smaller than its line is a floating superscript
+
+
 def _page_lines(page: pymupdf.Page) -> list[_Line]:
     links = [(pymupdf.Rect(l["from"]), l["uri"]) for l in page.get_links() if l.get("uri")]
-    lines: list[_Line] = []
+    raw: list[list[dict]] = []
     data = page.get_text("dict", flags=pymupdf.TEXT_PRESERVE_WHITESPACE)
     for block in data["blocks"]:
         if block["type"] != 0:
             continue
         for line in block["lines"]:
-            spans = [s for s in line["spans"] if s["text"].strip()]
-            if not spans:
-                continue
-            text = "".join(s["text"] for s in line["spans"]).strip()
-            main = max(spans, key=lambda s: len(s["text"]))
-            lines.append(_Line(
-                *line["bbox"],
-                size=round(main["size"], 1),
-                bold=_is_bold(main),
-                italic=_is_italic(main),
-                text=text,
-                html=_spans_html(line["spans"], links),
-            ))
+            spans = [dict(s) for s in line["spans"] if s["text"].strip()]
+            if spans:
+                raw.append(spans)
+    raw = _fold_floating_superscripts(raw)
+
+    lines: list[_Line] = []
+    for spans in raw:
+        main = max((s for s in spans if not s.get("floating")), key=lambda s: len(s["text"]), default=spans[0])
+        x0 = min(s["bbox"][0] for s in spans); x1 = max(s["bbox"][2] for s in spans)
+        y0 = min(s["bbox"][1] for s in spans if not s.get("floating")) if any(not s.get("floating") for s in spans) else min(s["bbox"][1] for s in spans)
+        y1 = max(s["bbox"][3] for s in spans)
+        lines.append(_Line(
+            x0, y0, x1, y1,
+            size=round(main["size"], 1),
+            bold=_is_bold(main),
+            italic=_is_italic(main),
+            text="".join(s["text"] for s in spans).strip(),
+            html=_spans_html(spans, links),
+        ))
     return lines
+
+
+def _fold_floating_superscripts(raw: list[list[dict]]) -> list[list[dict]]:
+    """Move verse numbers that PDF exporters place as separate tiny lines back into their line.
+
+    A candidate is a line made of one short span far smaller than the text line
+    whose vertical extent and horizontal span contain it. It is inserted at its
+    x position and flagged so it renders as <sup>.
+    """
+    floating: list[dict] = []
+    kept: list[list[dict]] = []
+    for spans in raw:
+        if len(spans) == 1 and len(spans[0]["text"].strip()) <= 4:
+            floating.append(spans[0])
+        else:
+            kept.append(spans)
+    unplaced: list[list[dict]] = []
+    for span in floating:
+        x0, y0, x1, y1 = span["bbox"]
+        home = None
+        for spans in kept:
+            line_size = max(s["size"] for s in spans)
+            if span["size"] > SUPERSCRIPT_RATIO * line_size:
+                continue
+            ly0 = min(s["bbox"][1] for s in spans); ly1 = max(s["bbox"][3] for s in spans)
+            lx0 = min(s["bbox"][0] for s in spans); lx1 = max(s["bbox"][2] for s in spans)
+            if y1 > ly0 - 0.3 * line_size and y0 < ly1 and x0 >= lx0 - line_size and x1 <= lx1 + 2:
+                home = spans
+                break
+        if home is None:
+            unplaced.append([span])
+            continue
+        span["floating"] = True
+        _insert_at_x(home, span)
+    return kept + unplaced
+
+
+def _insert_at_x(spans: list[dict], floating: dict) -> None:
+    """Place a floating span inside the line at its horizontal position, splitting the span under it."""
+    x = floating["bbox"][0]
+    for index, span in enumerate(spans):
+        sx0, _, sx1, _ = span["bbox"]
+        if not (sx0 <= x <= sx1) or sx1 <= sx0:
+            continue
+        text = span["text"]
+        estimate = round((x - sx0) / (sx1 - sx0) * len(text))
+        cut = _nearest_gap(text, estimate)
+        left = dict(span, text=text[:cut], bbox=(sx0, span["bbox"][1], x, span["bbox"][3]))
+        right = dict(span, text=text[cut:], bbox=(x, span["bbox"][1], sx1, span["bbox"][3]))
+        spans[index:index + 1] = [part for part in (left, floating, right) if part is floating or part["text"]]
+        return
+    spans.append(floating)
+    spans.sort(key=lambda s: s["bbox"][0])
+
+
+def _nearest_gap(text: str, estimate: int) -> int:
+    """Prefer the double space exporters leave where the superscript sat, then any space near the estimate."""
+    candidates = [m.start() + 1 for m in re.finditer(r"  ", text)]
+    candidates += [m.start() + 1 for m in re.finditer(r" ", text)]
+    if not candidates:
+        return max(0, min(len(text), estimate))
+    return min(candidates, key=lambda i: (abs(i - estimate) > 4, abs(i - estimate)))
 
 
 def _is_bold(span: dict) -> bool:
@@ -102,8 +173,8 @@ def _spans_html(spans: list[dict], links: list[tuple[pymupdf.Rect, str]]) -> str
         text = span["text"]
         if not text:
             continue
-        html = escape(text)
-        if span["flags"] & SUPERSCRIPT_FLAG:
+        html = escape(text.strip() if span.get("floating") else text)
+        if span["flags"] & SUPERSCRIPT_FLAG or span.get("floating"):
             html = f"<sup>{html}</sup>"
         if _is_bold(span):
             html = f"<strong>{html}</strong>"
@@ -113,7 +184,7 @@ def _spans_html(spans: list[dict], links: list[tuple[pymupdf.Rect, str]]) -> str
         if href:
             html = f'<a href="{escape(href, quote=True)}">{html}</a>'
         parts.append(html)
-    return "".join(parts).strip()
+    return re.sub(r" {2,}", " ", "".join(parts)).strip()
 
 
 def _link_for(rect: pymupdf.Rect, links: list[tuple[pymupdf.Rect, str]]) -> str | None:

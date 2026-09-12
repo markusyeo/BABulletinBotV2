@@ -67,8 +67,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     lines = [
-        "I fetch church files from the Bukit Arang Linktree and Google Drive so you don't have to hunt for them. "
-        "Files update automatically every week.",
+        "I fetch church files from the Bukit Arang Linktree and Google Drive so you don't have to hunt for them.",
         "",
         "Get a file",
     ]

@@ -77,3 +77,21 @@ def test_large_vertical_gaps_become_note_space(tmp_path):
     assert kinds.count("space") == 1, kinds
     space = next(b for b in book.blocks if b.kind == "space")
     assert 4 <= space.height_em <= 12
+
+
+def test_floating_verse_numbers_become_superscripts(tmp_path):
+    import pymupdf
+    doc = pymupdf.open()
+    page = doc.new_page(width=420, height=595)
+    page.insert_text((41, 120), "After the plague, the LORD said to Moses  and to Eleazar", fontsize=10.5, fontname="helv")
+    page.insert_text((41, 134), "the son of Aaron, the priest.", fontsize=10.5, fontname="helv")
+    page.insert_text((230, 114), "2", fontsize=6.3, fontname="hebo")
+    path = tmp_path / "verses.pdf"
+    doc.save(path)
+    doc.close()
+
+    book = read_pdf(str(path), get_device("libra-colour"), "verses")
+    paragraphs = [b for b in book.blocks if b.kind == "p"]
+    assert len(paragraphs) == 1, [b.text for b in book.blocks]
+    assert "<sup><strong>2</strong></sup>" in paragraphs[0].html or "<strong><sup>2</sup></strong>" in paragraphs[0].html
+    assert "Moses <strong><sup>2</sup></strong> and" in paragraphs[0].html
