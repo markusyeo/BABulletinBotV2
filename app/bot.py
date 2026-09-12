@@ -100,6 +100,8 @@ async def refresh_drive_link_commands(application) -> list[DriveLink]:
 
     for handler in application.bot_data.get(DRIVE_LINK_HANDLERS_KEY, []):
         application.remove_handler(handler)
+    # Direct links and Telegram file ids belong to last week's files once Linktree changes.
+    CACHE.clear_all()
 
     handlers = []
     registry = {drive_link.command: drive_link for drive_link in drive_links}
