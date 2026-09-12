@@ -28,7 +28,7 @@ from app.bot import (  # noqa: E402
     start,
 )
 from app.ebook_flow import CALLBACK_PATTERN, ebook_callback, ebook_command  # noqa: E402
-from app.scheduler import schedule_auto_refresh  # noqa: E402
+from app.scheduler import notify_admin_of_error, schedule_auto_refresh  # noqa: E402
 from app.utils.common import CACHE_DIR, ensure_dir  # noqa: E402
 
 load_dotenv()
@@ -87,6 +87,7 @@ async def post_init(application):
 
 async def log_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.error("Unhandled error while processing %s", update, exc_info=context.error)
+    await notify_admin_of_error(context)
 
 
 if __name__ == '__main__':

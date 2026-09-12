@@ -1,7 +1,8 @@
-"""Scheduled Linktree refresh so the bulletin commands roll over without a manual /refresh."""
+"""Scheduled Linktree refresh and admin notifications."""
 
 import logging
 import os
+import time as clock
 from datetime import time
 from zoneinfo import ZoneInfo
 
@@ -14,6 +15,8 @@ LOGGER = logging.getLogger(__name__)
 JOB_NAME = "auto_refresh"
 RETRY_DELAY_SECONDS = 600
 MAX_RETRIES = 3
+ERROR_ALERT_COOLDOWN_SECONDS = 600
+_last_error_alert: dict[str, float] = {}
 
 
 def schedule_auto_refresh(application: Application) -> None:
@@ -43,6 +46,20 @@ async def auto_refresh(context: ContextTypes.DEFAULT_TYPE) -> None:
     summary = ", ".join(f"/{link.command}" for link in links) or "no Drive-backed links found"
     LOGGER.info("Auto-refresh complete: %s", summary)
     await _notify_admin(context, f"Auto-refresh complete: {summary}")
+
+
+async def notify_admin_of_error(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Tell the admin chat about an unhandled error, at most once per error type every ten minutes."""
+    error = context.error
+    if error is None:
+        return
+    key = type(error).__name__
+    now = clock.monotonic()
+    if now - _last_error_alert.get(key, 0) < ERROR_ALERT_COOLDOWN_SECONDS:
+        return
+    _last_error_alert[key] = now
+    detail = str(error)[:300]
+    await _notify_admin(context, f"Bot error: {key}\n{detail}\nCheck `docker logs babulletinbot` for the traceback.")
 
 
 async def _notify_admin(context: ContextTypes.DEFAULT_TYPE, text: str) -> None:

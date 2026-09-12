@@ -110,7 +110,7 @@ A Telegram bot that fetches the weekly Sunday Bulletin from the Bukit Arang Chur
 
 Every PDF or DOCX the bot sends carries an **E-reader version** button. Tapping it, or running `/ebook`, walks through three inline-keyboard steps:
 
-1. **File**: any bulletin currently on Linktree, the songbook, or the sermon outline.
+1. **File**: any bulletin currently on Linktree, the songbook, or the sermon outline. The outline is converted from its DOCX (headings, lists and verse numbers survive); the PDF is used only when no DOCX is in the folder.
 2. **Device**: Kobo Clara BW, Clara Colour, Libra Colour, Sage, Elipsa 2E, a generic Kindle-sized reader, or a phone. Images are resampled to that screen's width and converted to greyscale for black-and-white readers. The choice is remembered per user and offered first next time.
 3. **Format** (Kobo only): KEPUB for Kobo's native reader, or standard EPUB. Non-Kobo devices skip this step and get EPUB.
 

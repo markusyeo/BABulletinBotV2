@@ -267,7 +267,7 @@ async def outline(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await status_message.edit_text("Sending sermon outline (PDF)...")
         try:
-            await message.reply_document(document=doc.telegram_ref, reply_markup=ebook_button("outline_pdf"))
+            await message.reply_document(document=doc.telegram_ref, reply_markup=ebook_button("outline"))
             await status_message.delete()
         except Exception as exc:
             logger.error("Failed to send outline link: %s", exc)
@@ -294,7 +294,7 @@ async def outline_doc(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         await status_message.edit_text("Sending sermon outline (DOC)...")
-        markup = ebook_button("outline_doc")
+        markup = ebook_button("outline")
         if doc.telegram_ref:
             await message.reply_document(document=doc.telegram_ref, reply_markup=markup)
         elif doc.filepath:

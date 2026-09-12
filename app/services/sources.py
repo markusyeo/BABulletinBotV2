@@ -28,8 +28,7 @@ class EbookSource:
 
 STATIC_SOURCES = [
     EbookSource("songbook", "Songbook"),
-    EbookSource("outline_pdf", "Sermon Outline (PDF)"),
-    EbookSource("outline_doc", "Sermon Outline (DOCX)"),
+    EbookSource("outline", "Sermon Outline"),
 ]
 
 
@@ -69,15 +68,16 @@ async def fetch_source_file(application, source_id: str) -> str:
         path, _ = await asyncio.to_thread(download_songbook, url)
         return path
 
-    if source_id in ("outline_pdf", "outline_doc"):
+    if source_id == "outline":
+        # The DOCX carries real headings, lists and verse superscripts; the PDF is only a fallback.
         html = await asyncio.to_thread(fetch_drive_folder)
-        if source_id == "outline_pdf":
-            file_id = extract_outline_file_id(html, "application/pdf")
-        else:
-            file_id = extract_outline_file_id(html, "wordprocessingml") or extract_outline_file_id(html, "msword")
+        file_id = (
+            extract_outline_file_id(html, "wordprocessingml")
+            or extract_outline_file_id(html, "application/pdf")
+        )
         if not file_id:
-            raise SourceUnavailable("No sermon outline was found in the Drive folder.")
-        path, _ = await asyncio.to_thread(download_outline, file_id, filename_prefix=source_id)
+            raise SourceUnavailable("No sermon outline (DOCX or PDF) was found in the Drive folder.")
+        path, _ = await asyncio.to_thread(download_outline, file_id, filename_prefix="outline")
         return path
 
     raise SourceUnavailable("Unknown file.")
