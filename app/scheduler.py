@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 
 from telegram.ext import Application, ContextTypes
 
+from app.admin import send_to_admin
 from app.bot import refresh_drive_link_commands
 
 LOGGER = logging.getLogger(__name__)
@@ -40,12 +41,12 @@ async def auto_refresh(context: ContextTypes.DEFAULT_TYPE) -> None:
         if attempt + 1 < MAX_RETRIES:
             context.job_queue.run_once(auto_refresh, RETRY_DELAY_SECONDS, data={"attempt": attempt + 1}, name=f"{JOB_NAME}_retry")
         else:
-            await _notify_admin(context, "Auto-refresh failed three times. Run /refresh manually.")
+            await send_to_admin(context.bot, "Auto-refresh failed three times. Run /refresh manually.")
         return
 
     summary = ", ".join(f"/{link.command}" for link in links) or "no Drive-backed links found"
     LOGGER.info("Auto-refresh complete: %s", summary)
-    await _notify_admin(context, f"Auto-refresh complete: {summary}")
+    await send_to_admin(context.bot, f"Auto-refresh complete: {summary}")
 
 
 async def notify_admin_of_error(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -59,17 +60,7 @@ async def notify_admin_of_error(context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     _last_error_alert[key] = now
     detail = str(error)[:300]
-    await _notify_admin(context, f"Bot error: {key}\n{detail}\nCheck `docker logs babulletinbot` for the traceback.")
-
-
-async def _notify_admin(context: ContextTypes.DEFAULT_TYPE, text: str) -> None:
-    chat_id = os.getenv("ADMIN_CHAT_ID")
-    if not chat_id:
-        return
-    try:
-        await context.bot.send_message(chat_id=int(chat_id), text=text)
-    except Exception as exc:
-        LOGGER.warning("Could not notify admin chat %s: %s", chat_id, exc)
+    await send_to_admin(context.bot, f"Bot error: {key}\n{detail}\nCheck `docker logs babulletinbot` for the traceback.")
 
 
 def _parse_time(value: str) -> tuple[int, int]:

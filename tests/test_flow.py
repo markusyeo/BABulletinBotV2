@@ -17,3 +17,12 @@ def test_callback_data_fits_telegram_limit():
 def test_button_targets_source():
     markup = ebook_button("songbook")
     assert markup.inline_keyboard[0][0].callback_data == "eb|s|songbook"
+
+
+def test_admin_chat_detection(monkeypatch):
+    from app import admin
+
+    monkeypatch.delenv("ADMIN_CHAT_ID", raising=False)
+    assert admin.admin_chat_id() is None and not admin.is_admin_chat(1)
+    monkeypatch.setenv("ADMIN_CHAT_ID", "273374275")
+    assert admin.is_admin_chat(273374275) and not admin.is_admin_chat(5)

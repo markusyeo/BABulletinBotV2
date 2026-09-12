@@ -1,4 +1,8 @@
-"""DOCX to block stream via mammoth, with images captured as EPUB assets."""
+"""DOCX to block stream via mammoth, with images captured as EPUB assets.
+
+Runs of empty paragraphs are the writing space sermon outlines leave for notes;
+they are kept as blank blocks instead of being collapsed away.
+"""
 
 import re
 from html import unescape
@@ -7,6 +11,9 @@ import mammoth
 from bs4 import BeautifulSoup
 
 from app.services.ebook.model import Asset, Block, Book
+
+EMPTY_LINE_EM = 1.4
+MAX_NOTE_SPACE_EM = 12.0
 
 STYLE_MAP = "\n".join([
     "p[style-name='Title'] => h1:fresh",
@@ -29,10 +36,23 @@ def read_docx(path: str, title: str) -> Book:
         return {"src": f"images/{name}"}
 
     with open(path, "rb") as fh:
-        result = mammoth.convert_to_html(fh, style_map=STYLE_MAP, convert_image=mammoth.images.img_element(save_image))
+        result = mammoth.convert_to_html(
+            fh,
+            style_map=STYLE_MAP,
+            convert_image=mammoth.images.img_element(save_image),
+            ignore_empty_paragraphs=False,
+        )
 
     soup = BeautifulSoup(result.value, "html.parser")
+    empty_run = 0
     for element in soup.find_all(recursive=False):
+        is_empty = element.name == "p" and not element.get_text(strip=True) and not element.find("img")
+        if is_empty:
+            empty_run += 1
+            continue
+        if empty_run:
+            book.blocks.append(Block(kind="space", height_em=round(min(MAX_NOTE_SPACE_EM, empty_run * EMPTY_LINE_EM), 1)))
+            empty_run = 0
         if element.name in ("h1", "h2", "h3"):
             book.blocks.append(Block(kind=element.name, html=element.decode_contents(), text=element.get_text(" ", strip=True)))
         elif element.name == "img":
@@ -40,9 +60,9 @@ def read_docx(path: str, title: str) -> Book:
         else:
             html = element.decode() if element.name not in ("p",) else element.decode_contents()
             text = element.get_text(" ", strip=True)
-            if not text and not element.find("img"):
-                continue
             book.blocks.append(Block(kind="p" if element.name == "p" else "raw", html=html, text=text))
+    if empty_run:
+        book.blocks.append(Block(kind="space", height_em=round(min(MAX_NOTE_SPACE_EM, empty_run * EMPTY_LINE_EM), 1)))
     return book
 
 

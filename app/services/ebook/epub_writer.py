@@ -28,6 +28,7 @@ h3 + p{margin-top:0;}
 sup{font-size:.72em;line-height:1;vertical-align:super;}
 a{color:inherit;text-decoration:underline;}
 figure{margin:.8em auto;text-align:center;page-break-inside:avoid;}
+.space{display:block;width:100%;margin:0;}
 figure img{display:inline-block;max-width:100%;height:auto;}
 ul,ol{margin:0 0 .7em 1.25em;padding-left:.5em;}
 li{margin:.25em 0;}
@@ -92,6 +93,8 @@ def _block_xhtml(block: Block) -> str:
         alt = escape(block.text or "image", quote=True)
         return (f'<figure><img src="images/{block.asset.name}" alt="{alt}" '
                 f'style="width:{block.width_pct}%"/></figure>')
+    if block.kind == "space":
+        return f'<div class="space" style="height:{block.height_em}em"></div>'
     if block.kind == "raw":
         return _xhtml(block.html)
     if block.kind in ("h1", "h2", "h3"):

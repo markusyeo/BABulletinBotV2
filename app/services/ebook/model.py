@@ -10,11 +10,12 @@ class Asset:
 
 @dataclass
 class Block:
-    kind: str          # h1 | h2 | h3 | p | img
+    kind: str          # h1 | h2 | h3 | p | img | space | raw
     html: str = ""     # inner XHTML for text blocks
     text: str = ""     # plain text, used for headings and de-duplication
     asset: Asset | None = None
     width_pct: int = 100
+    height_em: float = 0.0   # for "space": blank room left for handwritten notes
     # layout geometry in source-page points; used only while reading
     x0: float = 0.0
     y0: float = 0.0

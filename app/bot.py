@@ -2,9 +2,10 @@ import asyncio
 import logging
 import os
 
-from telegram import BotCommand, Update
+from telegram import BotCommand, BotCommandScopeChat, BotCommandScopeDefault, Update
 from telegram.ext import CommandHandler, ContextTypes
 
+from app.admin import admin_chat_id, is_admin_chat, send_to_admin
 from app.ebook_flow import ebook_button
 from app.services.cache import CACHE
 from app.services.fetch import (
@@ -27,13 +28,18 @@ DRIVE_LINK_REGISTRY_KEY = "drive_links"
 DRIVE_LINK_HANDLERS_KEY = "drive_link_handlers"
 
 STATIC_COMMANDS = [
-    BotCommand("songbook", "Download the latest Songbook"),
-    BotCommand("outline", "Download the Sermon Outline (PDF)"),
-    BotCommand("outline_doc", "Download the Sermon Outline (DOCX)"),
-    BotCommand("ebook", "Get a file as EPUB/KEPUB for your e-reader"),
-    BotCommand("help", "Show available commands"),
+    BotCommand("songbook", "The Open Worship songbook (PDF)"),
+    BotCommand("outline", "This week's sermon outline (PDF)"),
+    BotCommand("outline_doc", "This week's sermon outline (Word)"),
+    BotCommand("ebook", "Any file as EPUB or KEPUB for an e-reader"),
+    BotCommand("report", "Tell the maintainer something is broken"),
+    BotCommand("help", "What this bot does and how to use it"),
     BotCommand("start", "Start the bot"),
 ]
+ADMIN_COMMANDS = [
+    BotCommand("refresh", "Re-read Linktree and rebuild the file commands"),
+]
+AWAITING_REPORT_KEY = "awaiting_report"
 
 
 def _get_message(update: Update):
@@ -47,16 +53,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = _get_message(update)
     if message is None:
         return
-
-    linktree_url = os.getenv("LINKTREE_URL", "")
-    linktree_text = f"\nVisit our Linktree: {linktree_url}" if linktree_url else ""
     await message.reply_text(
-        text=f"Hi! I'm the Bukit Arang Bulletin Bot.\n"
-        f"Use /refresh to fetch the latest file commands.\n"
-        f"Use /songbook to get the latest Songbook.\n"
-        f"Use /outline for the Sermon Outline (PDF).\n"
-        f"Use /outline_doc for the Sermon Outline (DOCX).\n"
-        f"Use /ebook to get any of these as EPUB/KEPUB for a Kobo or other e-reader.{linktree_text}"
+        "Hi, I'm the Bukit Arang Bulletin Bot. I keep this week's Sunday bulletin, "
+        "the songbook and the sermon outline one tap away, and I can turn any of them "
+        "into an EPUB for your e-reader.\n\n"
+        "Send /help to see everything I can do."
     )
 
 
@@ -65,20 +66,33 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if message is None:
         return
 
+    lines = [
+        "I fetch church files from the Bukit Arang Linktree and Google Drive so you don't have to hunt for them. "
+        "Files update automatically every week.",
+        "",
+        "Get a file",
+    ]
+    drive_links: dict[str, DriveLink] = context.application.bot_data.get(DRIVE_LINK_REGISTRY_KEY, {})
+    lines += [f"/{link.command}: {link.label} (PDF)" for link in drive_links.values()]
+    lines += [
+        "/songbook: the Open Worship songbook (PDF)",
+        "/outline: this week's sermon outline (PDF)",
+        "/outline_doc: this week's sermon outline (Word)",
+        "",
+        "Read on a Kobo or other e-reader",
+        "/ebook: pick a file and a device, get an EPUB or KEPUB sized for its screen. "
+        "Every file I send also has an \"E-reader version\" button under it.",
+        "",
+        "Something wrong?",
+        "/report followed by a short note, for example: /report the 2pm bulletin is last week's. "
+        "It goes straight to the maintainer.",
+    ]
+    if is_admin_chat(message.chat_id):
+        lines += ["", "Admin", "/refresh: re-read Linktree now and rebuild the file commands."]
     linktree_url = os.getenv("LINKTREE_URL", "")
-    linktree_text = f"\nLinktree: {linktree_url}" if linktree_url else ""
-    drive_link_commands = _format_drive_link_commands(context)
-    await message.reply_text(
-        f"Available commands:\n"
-        f"/start - Start the bot\n"
-        f"/refresh - Refresh file commands from Linktree\n"
-        f"{drive_link_commands}"
-        f"/songbook - Download the latest Songbook\n"
-        f"/outline - Download the Sermon Outline (PDF)\n"
-        f"/outline_doc - Download the Sermon Outline (DOCX)\n"
-        f"/ebook - Get a file as EPUB/KEPUB for your e-reader\n"
-        f"/help - Show this help message{linktree_text}"
-    )
+    if linktree_url:
+        lines += ["", f"Everything comes from {linktree_url}"]
+    await message.reply_text("\n".join(lines))
 
 
 def _format_drive_link_commands(context: ContextTypes.DEFAULT_TYPE) -> str:
@@ -137,7 +151,10 @@ async def _set_bot_commands(application) -> None:
         for drive_link in drive_links.values()
     ]
     commands.extend(STATIC_COMMANDS)
-    await application.bot.set_my_commands(commands)
+    await application.bot.set_my_commands(commands, scope=BotCommandScopeDefault())
+    admin = admin_chat_id()
+    if admin is not None:
+        await application.bot.set_my_commands(commands + ADMIN_COMMANDS, scope=BotCommandScopeChat(chat_id=admin))
 
 
 async def set_bot_commands(application) -> None:
@@ -147,6 +164,12 @@ async def set_bot_commands(application) -> None:
 async def refresh(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = _get_message(update)
     if message is None:
+        return
+    if admin_chat_id() is not None and not is_admin_chat(message.chat_id):
+        await message.reply_text(
+            "Only the maintainer can run /refresh. Files refresh on their own every night; "
+            "if something looks stale, send /report and say which file."
+        )
         return
 
     status_message = await message.reply_text("Refreshing file commands from Linktree...")
@@ -309,3 +332,44 @@ async def outline_doc(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await status_message.edit_text(
             "An error occurred while fetching the outline. Please try again later."
         )
+
+
+async def report(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Forward a user's bug report to the admin chat, asking for details first if none were given."""
+    message = _get_message(update)
+    if message is None:
+        return
+    note = " ".join(context.args or []).strip()
+    if not note:
+        context.user_data[AWAITING_REPORT_KEY] = True
+        await message.reply_text(
+            "What went wrong? Reply with one message, for example: "
+            "\"/bulletin gave me last week's file\" or \"the EPUB is missing page 3\"."
+        )
+        return
+    await _forward_report(update, context, note)
+
+
+async def capture_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Second half of /report: the next plain message from a user we asked for details."""
+    message = _get_message(update)
+    if message is None or not context.user_data.get(AWAITING_REPORT_KEY):
+        return
+    context.user_data[AWAITING_REPORT_KEY] = False
+    await _forward_report(update, context, message.text or "")
+
+
+async def _forward_report(update: Update, context: ContextTypes.DEFAULT_TYPE, note: str):
+    message = update.message
+    user = update.effective_user
+    who = user.full_name if user else "unknown user"
+    handle = f" @{user.username}" if user and user.username else ""
+    user_id = user.id if user else "?"
+    delivered = await send_to_admin(
+        context.bot,
+        f"Bug report from {who}{handle} (id {user_id}, chat {message.chat_id}):\n\n{note}",
+    )
+    if delivered:
+        await message.reply_text("Thanks, your report has reached the maintainer.")
+    else:
+        await message.reply_text("I couldn't deliver your report right now. Please try again later.")

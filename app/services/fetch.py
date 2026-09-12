@@ -19,8 +19,8 @@ LOGGER = logging.getLogger(__name__)
 
 @dataclass
 class Document:
-    telegram_ref: Optional[str] = None   # file_id or direct URL — send directly
-    filepath: Optional[str] = None        # downloaded file path — send as upload
+    telegram_ref: Optional[str] = None   # Telegram file_id or direct URL, sent as-is
+    filepath: Optional[str] = None        # downloaded file, sent as an upload
     filename: Optional[str] = None
     drive_file_id: Optional[str] = None   # for post-upload caching
     source_url: Optional[str] = None      # original URL for post-upload caching

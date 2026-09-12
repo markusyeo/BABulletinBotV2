@@ -1,127 +1,87 @@
-# BABulletinBot_v2
+# BABulletinBot v2
 
-A Telegram bot that fetches the weekly Sunday Bulletin from the Bukit Arang Church Linktree and serves it to users.
+A Telegram bot for Bukit Arang Church. It reads the church Linktree and Google Drive folder, hands out the week's Sunday bulletin, the songbook and the sermon outline on request, and converts any of them into EPUB or KEPUB for e-readers.
 
-## Features
+## What it does
 
-- Refreshes file commands dynamically from Linktree.
-- Resolves Linktree redirects concurrently during refresh for faster command updates.
-- Resolves short URLs such as `tiny.cc` before checking for Google Drive files.
-- Downloads Songbook PDFs from Linktree.
-- Retrieves Sermon Outlines (PDF and DOCX) from Google Drive folders.
-- Handles Google Drive links (converts view links to download links).
-- Caches files locally to avoid redundant downloads.
-- Validates cache using URL checksums.
-- Appends the Sunday date to bulletin filenames.
-- File ID caching for faster re-sends on Telegram.
-- Refreshes the file commands from Linktree on a schedule (daily at 00:00 Singapore time by default), so the new week's bulletin appears without a manual `/refresh`.
-- Converts any PDF or DOCX it serves into EPUB or KEPUB sized for a chosen e-reader, with the result cached on disk. See [E-reader downloads](#e-reader-downloads).
-
-## Prerequisites
-
-- Docker (for containerized deployment)
-- Python 3.10+ (for local development)
-- A Telegram Bot Token (from [@BotFather](https://t.me/BotFather))
-
-## Setup & Configuration
-
-1.  **Clone the repository:**
-
-    ```bash
-    git clone <repository_url>
-    cd BABulletinBotV2
-    ```
-
-2.  **Environment Variables:**
-    Copy the example environment file and fill in the required values.
-
-    ```bash
-    cp .env.example .env
-    ```
-
-    Open `.env` and set the following variables:
-
-    ```
-    TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
-    LINKTREE_URL=https://linktr.ee/your_linktree_username
-    OUTLINE_FOLDER_URL=https://drive.google.com/drive/folders/your_folder_id
-    ```
-
-    **Required Environment Variables:**
-
-    - `TELEGRAM_BOT_TOKEN`: Your Telegram bot token from [@BotFather](https://t.me/BotFather)
-    - `LINKTREE_URL`: The URL to your Linktree page (e.g., `https://linktr.ee/your_username`)
-    - `OUTLINE_FOLDER_URL`: The Google Drive folder URL containing sermon outlines (e.g., `https://drive.google.com/drive/folders/your_folder_id`)
-
-    **Optional Environment Variables:**
-
-    - `TIMEZONE`: Zone for the scheduled refresh. Default `Asia/Singapore`.
-    - `AUTO_REFRESH_TIME`: Daily refresh time as `HH:MM` in `TIMEZONE`. Default `00:00`. A failed run retries every 10 minutes, three times.
-    - `ADMIN_CHAT_ID`: Telegram chat id that receives a one-line summary after each scheduled refresh. Unset means no message.
-    - `EBOOK_AUTHOR`: Author written into generated EPUB metadata. Default `Bukit Arang Church`.
-
-## Running Locally
-
-1.  **Install dependencies:**
-
-    ```bash
-    uv sync
-    ```
-
-2.  **Run the bot:**
-    ```bash
-    uv run -m app.main
-    ```
-
-## Deploying with Docker Compose
-
-1.  **Build and run the container:**
-
-    ```bash
-    docker-compose up -d --build
-    ```
-
-2.  **Verify it's running:**
-
-    ```bash
-    docker-compose ps
-    docker-compose logs -f
-    ```
-
-3.  **Stop the bot:**
-    ```bash
-    docker-compose down
-    ```
+- Builds one command per Google Drive file on the Linktree, so `/bulletin` (or `/bulletin_830_1045` and `/bulletin_2pm` when the church splits them) always points at the current week.
+- Refreshes those commands every night at 00:00 Singapore time. Nobody has to run `/refresh` on Sunday morning.
+- Serves the songbook from Linktree and the sermon outline (PDF or Word) from the Drive folder.
+- Converts PDFs and Word files to EPUB or KEPUB sized for a chosen Kobo, Kindle-class reader or phone. See [E-reader downloads](#e-reader-downloads).
+- Caches downloads and Telegram file ids so repeat requests are instant.
+- Forwards `/report` messages, error alerts and refresh summaries to the maintainer's chat.
 
 ## Commands
 
-- `/start`: Welcome message with bot information and Linktree link.
-- `/help`: Show available commands.
-- `/refresh`: Re-scrape Linktree, resolve every page link to its final URL, and rebuild commands for Google Drive-backed files.
-- `/bulletin`: Download the latest Sunday Bulletin when Linktree has one shared bulletin.
-- `/bulletin_830_1045`: Download the latest 8.30/10.45am Gathering Bulletin when Linktree has a split bulletin.
-- `/bulletin_2pm`: Download the latest 2pm Gathering Bulletin when Linktree has a split bulletin.
-- `/songbook`: Download and receive the latest Songbook.
-- `/outline`: Download the Sermon Outline (PDF format).
-- `/outline_doc`: Download the Sermon Outline (DOCX format).
-- `/ebook`: Pick a file, a device and a format, and receive it as EPUB or KEPUB.
+| Command | What you get |
+| --- | --- |
+| `/bulletin`, `/bulletin_830_1045`, `/bulletin_2pm` | This week's bulletin PDF. Which commands exist depends on what Linktree lists. |
+| `/songbook` | The Open Worship songbook PDF. |
+| `/outline` | This week's sermon outline as PDF. |
+| `/outline_doc` | This week's sermon outline as Word. |
+| `/ebook` | Pick a file, a device and a format; receive an EPUB or KEPUB. |
+| `/report <note>` | Send a bug report to the maintainer. Without a note, the bot asks for one. |
+| `/help` | What the bot does and how to use it. |
+| `/refresh` | Maintainer only. Re-read Linktree now and rebuild the file commands. |
 
 ## E-reader downloads
 
-Every PDF or DOCX the bot sends carries an **E-reader version** button. Tapping it, or running `/ebook`, walks through three inline-keyboard steps:
+Every PDF or Word file the bot sends has an "E-reader version" button under it. That button, or `/ebook`, runs three steps, each an inline keyboard that edits the same message:
 
-1. **File**: any bulletin currently on Linktree, the songbook, or the sermon outline. The outline is converted from its DOCX (headings, lists and verse numbers survive); the PDF is used only when no DOCX is in the folder.
-2. **Device**: Kobo Clara BW, Clara Colour, Libra Colour, Sage, Elipsa 2E, a generic Kindle-sized reader, or a phone. Images are resampled to that screen's width and converted to greyscale for black-and-white readers. The choice is remembered per user and offered first next time.
-3. **Format** (Kobo only): KEPUB for Kobo's native reader, or standard EPUB. Non-Kobo devices skip this step and get EPUB.
+1. File: any bulletin on Linktree, the songbook, or the sermon outline. The outline is converted from the Word file, which keeps headings, lists and verse numbers; the PDF is used only when the folder has no Word file.
+2. Device: Kobo Clara BW, Clara Colour, Libra Colour, Sage, Elipsa 2E, a Kindle-class reader, or a phone. Images are resampled to that screen width and turned greyscale for black-and-white readers. The bot remembers the choice and offers it first next time.
+3. Format, Kobo only: KEPUB for Kobo's own reader, or standard EPUB. Other devices skip this step and get EPUB.
 
-Conversions are cached under `bulletin_cache/ebooks/` keyed by source content, device and format, so a file is converted once per week per device.
+Results are cached in `bulletin_cache/ebooks/` by source content, device and format, so each file is converted once per device per week.
 
-The PDF reader works from PyMuPDF's font-aware line geometry rather than raw text extraction: it merges wrapped lines into paragraphs, picks headings by size and weight, recognises the bulletin's label-and-body column layout, keeps hyperlinks and embedded images, and renders any page with no extractable text (scans, flattened designs) as an image so nothing disappears. DOCX goes through mammoth. Legacy `.doc` files are not convertible.
+How the PDF reader works: PyMuPDF gives every text line with its font, size, weight and position. Lines are merged into paragraphs by proximity, headings are picked by size and weight relative to the body text, and the bulletin's label-and-body column layout is recognised and read in order. Hyperlinks and embedded images are kept. Vertical gaps that outlines leave for handwritten notes become blank space of matching height. A page with no extractable text (a scan, a flattened design) is rendered as an image so it is not lost. Word files go through mammoth, and runs of empty paragraphs are kept as note space. Legacy `.doc` files cannot be converted.
 
-The device table, package layout and stylesheet are adapted from [KoboForge](https://github.com/AlphaeusNg/KoboForge) by Alphaeus Ng. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+The device table, EPUB package layout and stylesheet are adapted from [KoboForge](https://github.com/AlphaeusNg/KoboForge) by Alphaeus Ng. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+## Setup
+
+You need a bot token from [@BotFather](https://t.me/BotFather), Docker for deployment, and Python 3.10 with [uv](https://docs.astral.sh/uv/) for local runs.
+
+```bash
+git clone https://github.com/markusyeo/BABulletinBotV2
+cd BABulletinBotV2
+cp .env.example .env
+```
+
+Fill in `.env`:
+
+| Variable | Required | Meaning |
+| --- | --- | --- |
+| `TELEGRAM_BOT_TOKEN` | yes | Token from BotFather. |
+| `LINKTREE_URL` | yes | The church Linktree, for example `https://linktr.ee/bukitarangchurch`. |
+| `OUTLINE_FOLDER_URL` | yes | Google Drive folder that holds the sermon outlines. |
+| `ADMIN_CHAT_ID` | no | Your own chat with the bot. Receives `/report` messages, error alerts and nightly refresh summaries, and is the only chat allowed to run `/refresh`. Send the bot any message, then read the id from `getUpdates`, or set it after the first `/ebook` use from `bulletin_cache/bot_state.pickle`. |
+| `TIMEZONE` | no | Zone for the nightly refresh. Default `Asia/Singapore`. |
+| `AUTO_REFRESH_TIME` | no | Nightly refresh time as `HH:MM`. Default `00:00`. A failed run retries three times, ten minutes apart. |
+| `EBOOK_AUTHOR` | no | Author written into generated EPUBs. Default `Bukit Arang Church`. |
+
+## Run
+
+Locally:
+
+```bash
+uv sync
+uv run -m app.main
+```
+
+With Docker Compose:
+
+```bash
+docker compose up -d --build
+docker compose logs -f
+```
+
+`bulletin_cache/` is mounted into the container and holds downloads, generated ebooks and the per-user settings file.
 
 ## Tests
 
 ```bash
 uv run pytest
 ```
+
+The tests build small PDFs on the fly, so they need no files from the church.

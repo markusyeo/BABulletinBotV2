@@ -9,6 +9,8 @@ from telegram.ext import (
     CallbackQueryHandler,
     CommandHandler,
     ContextTypes,
+    MessageHandler,
+    filters,
     PersistenceInput,
     PicklePersistence,
 )
@@ -18,7 +20,9 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from app.bot import (  # noqa: E402
+    capture_report,
     help_command,
+    report,
     outline,
     outline_doc,
     refresh,
@@ -69,6 +73,8 @@ def main():
     application.add_handler(CommandHandler("outline", outline))
     application.add_handler(CommandHandler("outline_doc", outline_doc))
     application.add_handler(CommandHandler("ebook", ebook_command))
+    application.add_handler(CommandHandler("report", report))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, capture_report))
     application.add_handler(CallbackQueryHandler(ebook_callback, pattern=CALLBACK_PATTERN))
     application.add_error_handler(log_error)
 

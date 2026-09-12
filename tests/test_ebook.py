@@ -59,3 +59,21 @@ def test_unsupported_extension_is_rejected(tmp_path):
     legacy.write_bytes(b"not really a word file")
     with pytest.raises(UnsupportedSource):
         convert_to_ebook(str(legacy), get_device("sage"), "epub", "Test", cache_dir=str(tmp_path))
+
+
+def test_large_vertical_gaps_become_note_space(tmp_path):
+    import pymupdf
+    doc = pymupdf.open()
+    page = doc.new_page(width=595, height=842)
+    page.insert_text((36, 60), "Applications", fontsize=12, fontname="hebo")
+    page.insert_text((36, 260), "Discussion questions", fontsize=12, fontname="hebo")
+    page.insert_text((36, 285), "1. What does trusting God look like for you?", fontsize=12, fontname="helv")
+    path = tmp_path / "outline.pdf"
+    doc.save(path)
+    doc.close()
+
+    book = read_pdf(str(path), get_device("libra-colour"), "outline")
+    kinds = [b.kind for b in book.blocks]
+    assert kinds.count("space") == 1, kinds
+    space = next(b for b in book.blocks if b.kind == "space")
+    assert 4 <= space.height_em <= 12

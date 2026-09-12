@@ -27,6 +27,11 @@ MIN_IMAGE_POINTS = 14         # displayed size below this is decoration (icons, 
 LABEL_ZONE_RATIO = 0.3        # left 30% of the page may hold labels
 HEADING_SCALE = 1.25          # size relative to body text that makes a heading
 IMAGE_MIN_WIDTH_PCT = 30
+NOTE_GAP_SCALE = 2.8          # a vertical gap this many body sizes tall is deliberate blank space
+LINE_HEIGHT_SCALE = 1.4
+MAX_NOTE_SPACE_EM = 12.0
+MIN_NOTE_SPACE_EM = 2.5       # anything smaller is a section gap, not room to write
+FOOTER_ZONE_RATIO = 0.78
 JPEG_PIXEL_THRESHOLD = 300_000
 
 
@@ -248,7 +253,7 @@ def _page_blocks(
 
     has_left_anchor = any(b.kind == "h3" for b in texts) or any(i.x0 < label_zone for i in images)
     if not has_left_anchor:
-        return sorted(texts + images, key=lambda b: (b.y0, b.x0))
+        return _with_note_space(sorted(texts + images, key=lambda b: (b.y0, b.x0)), body_size, height)
 
     anchors = sorted(
         [b for b in texts if b.x0 < label_zone] + images,
@@ -267,7 +272,31 @@ def _page_blocks(
     for index, anchor in enumerate(anchors):
         ordered.append(anchor)
         ordered.extend(attached[index])
-    return ordered
+    return _with_note_space(ordered, body_size, height)
+
+
+def _with_note_space(blocks: list[Block], body_size: float, page_height: float) -> list[Block]:
+    """Keep the blank room outlines leave for handwritten notes, as KoboForge does.
+
+    A gap between consecutive text blocks that is far taller than a paragraph
+    break becomes an empty block of proportional height, capped so a mostly
+    empty page does not turn into many empty screens.
+    """
+    out: list[Block] = []
+    for previous, block in zip([None] + blocks, blocks):
+        if (
+            previous is not None
+            and previous.kind not in ("img", "h1")   # room under a page's section title is layout, not notes
+            and block.kind != "img"
+            and block.y0 < FOOTER_ZONE_RATIO * page_height   # gaps above a footer box are layout too
+        ):
+            gap = block.y0 - previous.y1
+            if gap > NOTE_GAP_SCALE * body_size:
+                height = min(MAX_NOTE_SPACE_EM, (gap / (LINE_HEIGHT_SCALE * body_size) - 1) * 1.4)
+                if height >= MIN_NOTE_SPACE_EM:
+                    out.append(Block(kind="space", height_em=round(height, 1)))
+        out.append(block)
+    return out
 
 
 def _is_page_number(block: Block, page_height: float) -> bool:
