@@ -139,11 +139,17 @@ def _extract_linktree_entries(html_content: str) -> list[tuple[str, str]]:
     for a_tag in soup.find_all("a"):
         label = " ".join(a_tag.get_text(" ", strip=True).split())
         href = a_tag.get("href")
-        if not label or not href:
+        if not label or not href or _is_linktree_site_link(href):
             continue
         entries.append((label, href))
 
     return entries
+
+
+def _is_linktree_site_link(href: str) -> bool:
+    """Linktree's own footer, blog and 'discover' anchors are never a file we want to resolve."""
+    host = urlparse(href).netloc.lower()
+    return host == "linktr.ee" or host.endswith(".linktr.ee")
 
 
 def _build_drive_links(resolved_entries: list[tuple[str, str]]) -> list[DriveLink]:
