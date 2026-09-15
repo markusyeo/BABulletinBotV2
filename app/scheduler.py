@@ -26,10 +26,11 @@ def schedule_auto_refresh(application: Application) -> None:
     application.job_queue.run_daily(
         auto_refresh,
         time=time(hour, minute, tzinfo=timezone),
+        days=(0,),  # PTB: 0=Sunday, so 00:00 Sunday == Saturday night/Sunday 12am
         name=JOB_NAME,
         data={"attempt": 0},
     )
-    LOGGER.info("Auto-refresh scheduled daily at %02d:%02d %s", hour, minute, timezone.key)
+    LOGGER.info("Auto-refresh scheduled weekly (Sat night/Sun 00:00) at %02d:%02d %s", hour, minute, timezone.key)
 
 
 async def auto_refresh(context: ContextTypes.DEFAULT_TYPE) -> None:

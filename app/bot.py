@@ -166,7 +166,7 @@ async def refresh(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     if admin_chat_id() is not None and not is_admin_chat(message.chat_id):
         await message.reply_text(
-            "Only the maintainer can run /refresh. Files refresh on their own every night; "
+            "Only the maintainer can run /refresh. Files refresh on their own every Sunday at 12am; "
             "if something looks stale, send /report and say which file."
         )
         return

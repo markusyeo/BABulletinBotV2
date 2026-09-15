@@ -5,7 +5,7 @@ A Telegram bot for Bukit Arang Church. It reads the church Linktree and Google D
 ## What it does
 
 - Builds one command per Google Drive file on the Linktree, so `/bulletin` (or `/bulletin_830_1045` and `/bulletin_2pm` when the church splits them) always points at the current week.
-- Refreshes those commands every night at 00:00 Singapore time. Nobody has to run `/refresh` on Sunday morning.
+- Refreshes those commands every Saturday night at 00:00 Singapore time (i.e. as Sunday begins). Nobody has to run `/refresh` on Sunday morning.
 - Serves the songbook from Linktree and the sermon outline (PDF or Word) from the Drive folder.
 - Converts PDFs and Word files to EPUB or KEPUB sized for a chosen Kobo, Kindle-class reader or phone. See [E-reader downloads](#e-reader-downloads).
 - Caches downloads and Telegram file ids so repeat requests are instant.
@@ -55,9 +55,9 @@ Fill in `.env`:
 | `TELEGRAM_BOT_TOKEN` | yes | Token from BotFather. |
 | `LINKTREE_URL` | yes | The church Linktree, for example `https://linktr.ee/bukitarangchurch`. |
 | `OUTLINE_FOLDER_URL` | yes | Google Drive folder that holds the sermon outlines. |
-| `ADMIN_CHAT_ID` | no | Your own chat with the bot. Receives `/report` messages, error alerts and nightly refresh summaries, and is the only chat allowed to run `/refresh`. Send the bot any message, then read the id from `getUpdates`, or set it after the first `/ebook` use from `bulletin_cache/bot_state.pickle`. |
-| `TIMEZONE` | no | Zone for the nightly refresh. Default `Asia/Singapore`. |
-| `AUTO_REFRESH_TIME` | no | Nightly refresh time as `HH:MM`. Default `00:00`. A failed run retries three times, ten minutes apart. |
+| `ADMIN_CHAT_ID` | no | Your own chat with the bot. Receives `/report` messages, error alerts and weekly refresh summaries, and is the only chat allowed to run `/refresh`. Send the bot any message, then read the id from `getUpdates`, or set it after the first `/ebook` use from `bulletin_cache/bot_state.pickle`. |
+| `TIMEZONE` | no | Zone for the weekly refresh. Default `Asia/Singapore`. |
+| `AUTO_REFRESH_TIME` | no | Weekly refresh time as `HH:MM`, applied on Sunday. Default `00:00`. A failed run retries three times, ten minutes apart. |
 | `EBOOK_AUTHOR` | no | Author written into generated EPUBs. Default `Bukit Arang Church`. |
 
 ## Run
