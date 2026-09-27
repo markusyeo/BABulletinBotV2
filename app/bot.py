@@ -1,8 +1,9 @@
 import asyncio
 import logging
 import os
+import re
 
-from telegram import BotCommand, BotCommandScopeChat, BotCommandScopeDefault, Update
+from telegram import BotCommand, BotCommandScopeChat, BotCommandScopeDefault, ReplyParameters, Update
 from telegram.ext import CommandHandler, ContextTypes
 
 from app.admin import admin_chat_id, is_admin_chat, send_to_admin
@@ -48,6 +49,9 @@ ADMIN_COMMANDS = [
     BotCommand("refresh", "Re-read Linktree and rebuild the file commands"),
 ]
 AWAITING_REPORT_KEY = "awaiting_report"
+# Parsed back out of a forwarded report when the admin replies to it, so answers survive restarts.
+# Reports sent before "msg" was added still carry the chat id.
+REPORT_HEADER = re.compile(r"^Bug report from .*\(id [^,]+, chat (-?\d+)(?:, msg (\d+))?\):", re.MULTILINE)
 
 
 def _get_message(update: Update):
@@ -97,7 +101,11 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "It goes straight to the maintainer.",
     ]
     if is_admin_chat(message.chat_id):
-        lines += ["", "Admin", "/refresh: re-read Linktree now and rebuild the file commands."]
+        lines += [
+            "", "Admin",
+            "/refresh: re-read Linktree now and rebuild the file commands.",
+            "Reply to a bug report here and I'll send your reply to the person who reported it.",
+        ]
     linktree_url = os.getenv("LINKTREE_URL", "")
     if linktree_url:
         lines += ["", f"Everything comes from {linktree_url}"]
@@ -426,9 +434,14 @@ async def report(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def capture_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Second half of /report: the next plain message from a user we asked for details."""
+    """Plain text: the admin answering a forwarded report, or the second half of a user's /report."""
     message = _get_message(update)
-    if message is None or not context.user_data.get(AWAITING_REPORT_KEY):
+    if message is None:
+        return
+    if is_admin_chat(message.chat_id) and message.reply_to_message is not None:
+        if await _answer_report(message, context):
+            return
+    if not context.user_data.get(AWAITING_REPORT_KEY):
         return
     context.user_data[AWAITING_REPORT_KEY] = False
     await _forward_report(update, context, message.text or "")
@@ -442,9 +455,37 @@ async def _forward_report(update: Update, context: ContextTypes.DEFAULT_TYPE, no
     user_id = user.id if user else "?"
     delivered = await send_to_admin(
         context.bot,
-        f"Bug report from {who}{handle} (id {user_id}, chat {message.chat_id}):\n\n{note}",
+        f"Bug report from {who}{handle} (id {user_id}, chat {message.chat_id}, msg {message.message_id}):\n\n{note}",
     )
     if delivered:
         await message.reply_text("Thanks, your report has reached the maintainer.")
     else:
         await message.reply_text("I couldn't deliver your report right now. Please try again later.")
+
+
+async def _answer_report(message, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    """Admin replied to a forwarded report: pass the reply on to the reporter. False if it wasn't a report."""
+    original = message.reply_to_message
+    if original.from_user is None or original.from_user.id != context.bot.id:
+        return False
+    match = REPORT_HEADER.search(original.text or "")
+    if not match:
+        return False
+
+    chat_id = int(match.group(1))
+    reply_to = (
+        ReplyParameters(message_id=int(match.group(2)), allow_sending_without_reply=True)
+        if match.group(2) else None
+    )
+    try:
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"Reply from the maintainer about your report:\n\n{message.text}",
+            reply_parameters=reply_to,
+        )
+    except Exception as exc:
+        logger.warning("Could not deliver report reply to chat %s: %s", chat_id, exc)
+        await message.reply_text(f"Couldn't deliver that reply: {exc}")
+        return True
+    await message.reply_text("Sent to the reporter.")
+    return True

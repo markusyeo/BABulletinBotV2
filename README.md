@@ -9,7 +9,7 @@ A Telegram bot for Bukit Arang Church. It reads the church Linktree and Google D
 - Serves the songbook from Linktree and the sermon outline (PDF or Word) from the Drive folder. When the folder has a subfolder per gathering (`830/1045am`, `2pm`), each gets its own commands, rebuilt on the same weekly refresh.
 - Converts PDFs and Word files to EPUB or KEPUB sized for a chosen Kobo, Kindle-class reader or phone. See [E-reader downloads](#e-reader-downloads).
 - Caches downloads and Telegram file ids so repeat requests are instant.
-- Forwards `/report` messages, error alerts and refresh summaries to the maintainer's chat.
+- Forwards `/report` messages, error alerts and refresh summaries to the maintainer's chat. Replying to a forwarded report there sends the reply back to the person who reported it.
 
 ## Commands
 
@@ -21,7 +21,7 @@ A Telegram bot for Bukit Arang Church. It reads the church Linktree and Google D
 | `/outline_doc` | This week's sermon outline as Word, one per gathering. |
 | `/outline_830_1045am`, `/outline_doc_830_1045am`, `/outline_2pm`, `/outline_doc_2pm` | One gathering's outline. Which commands exist depends on the subfolders in the outline folder. |
 | `/ebook` | Pick a file, a device and a format; receive an EPUB or KEPUB. |
-| `/report <note>` | Send a bug report to the maintainer. Without a note, the bot asks for one. |
+| `/report <note>` | Send a bug report to the maintainer. Without a note, the bot asks for one. The maintainer answers by replying to the report in the admin chat. |
 | `/help` | What the bot does and how to use it. |
 | `/refresh` | Maintainer only. Re-read Linktree now and rebuild the file commands. |
 
