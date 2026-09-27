@@ -16,6 +16,12 @@ from app.services.fetch import (
     resolve_songbook,
 )
 from app.services.linktree import DriveLink, fetch_linktree, find_drive_links_async
+from app.services.outlines import (
+    OUTLINE_REGISTRY_KEY,
+    OutlineService,
+    discover_outline_services_async,
+    outline_source_id,
+)
 from app.services.sources import drive_source_id
 
 logging.basicConfig(
@@ -26,11 +32,13 @@ logger = logging.getLogger(__name__)
 
 DRIVE_LINK_REGISTRY_KEY = "drive_links"
 DRIVE_LINK_HANDLERS_KEY = "drive_link_handlers"
+OUTLINE_HANDLERS_KEY = "outline_handlers"
+OUTLINE_KINDS = {"pdf": "PDF", "doc": "Word"}
 
 STATIC_COMMANDS = [
     BotCommand("songbook", "The Open Worship songbook (PDF)"),
-    BotCommand("outline", "This week's sermon outline (PDF)"),
-    BotCommand("outline_doc", "This week's sermon outline (Word)"),
+    BotCommand("outline", "This week's sermon outlines, every gathering (PDF)"),
+    BotCommand("outline_doc", "This week's sermon outlines, every gathering (Word)"),
     BotCommand("ebook", "Any file as EPUB or KEPUB for an e-reader"),
     BotCommand("report", "Tell the maintainer something is broken"),
     BotCommand("help", "What this bot does and how to use it"),
@@ -73,10 +81,12 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     drive_links: dict[str, DriveLink] = context.application.bot_data.get(DRIVE_LINK_REGISTRY_KEY, {})
     lines += [f"/{link.command}: {link.label} (PDF)" for link in drive_links.values()]
+    lines += [f"/{command.command}: {command.description[0].lower()}{command.description[1:]}"
+              for command in outline_commands(context.application)]
     lines += [
         "/songbook: the Open Worship songbook (PDF)",
-        "/outline: this week's sermon outline (PDF)",
-        "/outline_doc: this week's sermon outline (Word)",
+        "/outline: this week's sermon outlines for every gathering (PDF)",
+        "/outline_doc: this week's sermon outlines for every gathering (Word)",
         "",
         "Read on a Kobo or other e-reader",
         "/ebook: pick a file and a device, get an EPUB or KEPUB sized for its screen. "
@@ -110,7 +120,13 @@ def _format_drive_link_commands(context: ContextTypes.DEFAULT_TYPE) -> str:
 async def refresh_drive_link_commands(application) -> list[DriveLink]:
     """Fetch Linktree, rebuild Drive file commands, and update Telegram suggestions."""
     html = await asyncio.to_thread(fetch_linktree, force=True)
+    try:
+        await refresh_outline_commands(application)
+    except Exception as exc:
+        # Keep last week's outline commands; /outline and /outline_doc still look the folder up live.
+        logger.error("Failed to refresh outline commands: %s", exc)
     reserved_commands = {command.command for command in STATIC_COMMANDS}
+    reserved_commands |= {command.command for command in outline_commands(application)}
     drive_links = [
         link for link in await find_drive_links_async(html)
         if link.command not in reserved_commands
@@ -137,6 +153,37 @@ async def refresh_drive_link_commands(application) -> list[DriveLink]:
 refresh_bulletin_commands = refresh_drive_link_commands
 
 
+async def refresh_outline_commands(application) -> list[OutlineService]:
+    """Register /outline_<gathering> and /outline_doc_<gathering> for each subfolder of the outline folder."""
+    services = await discover_outline_services_async()
+    for handler in application.bot_data.get(OUTLINE_HANDLERS_KEY, []):
+        application.remove_handler(handler)
+
+    handlers = []
+    for service in services:
+        if not service.slug:
+            continue  # outlines in the root folder are what plain /outline and /outline_doc already send
+        for command in (service.pdf_command, service.doc_command):
+            handler = CommandHandler(command, outline_service_command)
+            application.add_handler(handler)
+            handlers.append(handler)
+
+    application.bot_data[OUTLINE_REGISTRY_KEY] = {service.slug: service for service in services}
+    application.bot_data[OUTLINE_HANDLERS_KEY] = handlers
+    return services
+
+
+def outline_commands(application) -> list[BotCommand]:
+    services: dict[str, OutlineService] = application.bot_data.get(OUTLINE_REGISTRY_KEY, {})
+    commands = []
+    for service in services.values():
+        if not service.slug:
+            continue
+        commands.append(BotCommand(service.pdf_command, f"Sermon outline, {service.label} (PDF)"))
+        commands.append(BotCommand(service.doc_command, f"Sermon outline, {service.label} (Word)"))
+    return commands
+
+
 async def _set_bot_commands(application) -> None:
     drive_links: dict[str, DriveLink] = application.bot_data.get(
         DRIVE_LINK_REGISTRY_KEY,
@@ -149,6 +196,7 @@ async def _set_bot_commands(application) -> None:
         )
         for drive_link in drive_links.values()
     ]
+    commands.extend(outline_commands(application))
     commands.extend(STATIC_COMMANDS)
     await application.bot.set_my_commands(commands, scope=BotCommandScopeDefault())
     admin = admin_chat_id()
@@ -174,15 +222,18 @@ async def refresh(update: Update, context: ContextTypes.DEFAULT_TYPE):
     status_message = await message.reply_text("Refreshing file commands from Linktree...")
     try:
         drive_links = await refresh_drive_link_commands(context.application)
-        if not drive_links:
+        listed = [f"/{drive_link.command} - {drive_link.label}" for drive_link in drive_links]
+        listed += [
+            f"/{command.command} - {command.description}"
+            for command in outline_commands(context.application)
+        ]
+        if not listed:
             await status_message.edit_text(
                 "Refresh complete, but no Google Drive-backed file links were found."
             )
             return
 
-        command_list = "\n".join(
-            f"/{drive_link.command} - {drive_link.label}" for drive_link in drive_links
-        )
+        command_list = "\n".join(listed)
         await status_message.edit_text(
             f"Refresh complete. Available file commands:\n{command_list}"
         )
@@ -276,61 +327,86 @@ async def songbook(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def outline(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    message = _get_message(update)
-    if message is None:
-        return
-
-    status_message = await message.reply_text("Fetching the sermon outline (PDF)... please wait.")
-    try:
-        doc = await resolve_outline_pdf(CACHE)
-        if not doc.found:
-            await status_message.edit_text("Sorry, I couldn't find the sermon outline (PDF).")
-            return
-
-        await status_message.edit_text("Sending sermon outline (PDF)...")
-        try:
-            await message.reply_document(document=doc.telegram_ref, reply_markup=ebook_button("outline"))
-            await status_message.delete()
-        except Exception as exc:
-            logger.error("Failed to send outline link: %s", exc)
-            await status_message.edit_text(
-                "An error occurred while fetching the outline. Please try again later."
-            )
-    except Exception as exc:
-        logger.error("Error in outline command: %s", exc)
-        await status_message.edit_text(
-            "An error occurred while fetching the outline. Please try again later."
-        )
+    await _send_outlines(update, "pdf")
 
 
 async def outline_doc(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await _send_outlines(update, "doc")
+
+
+async def outline_service_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/outline_<gathering> and /outline_doc_<gathering>: one gathering's outline."""
+    message = _get_message(update)
+    if message is None or not message.text:
+        return
+
+    command = message.text.split()[0].split("@")[0].lstrip("/")
+    services: dict[str, OutlineService] = context.application.bot_data.get(OUTLINE_REGISTRY_KEY, {})
+    for service in services.values():
+        if command == service.pdf_command:
+            await _send_outlines(update, "pdf", service)
+            return
+        if command == service.doc_command:
+            await _send_outlines(update, "doc", service)
+            return
+    await message.reply_text(
+        "I don't have that outline command loaded any more. Try /outline or /outline_doc."
+    )
+
+
+async def _send_outlines(update: Update, kind: str, service: OutlineService | None = None):
+    """Send one gathering's outline, or every gathering's when no service is given."""
     message = _get_message(update)
     if message is None:
         return
 
-    status_message = await message.reply_text("Fetching the sermon outline (DOC)... please wait.")
+    kind_label = OUTLINE_KINDS[kind]
+    status_message = await message.reply_text(
+        f"Fetching the sermon outline ({kind_label})... please wait."
+    )
     try:
-        doc = await resolve_outline_doc(CACHE)
-        if not doc.found:
-            await status_message.edit_text("Sorry, I could not find the sermon outline (DOC).")
-            return
-
-        await status_message.edit_text("Sending sermon outline (DOC)...")
-        markup = ebook_button("outline")
-        if doc.telegram_ref:
-            await message.reply_document(document=doc.telegram_ref, reply_markup=markup)
-        elif doc.filepath:
-            with open(doc.filepath, "rb") as fh:
-                sent = await message.reply_document(document=fh, filename=doc.filename, reply_markup=markup)
-            if sent.document and doc.drive_file_id:
-                CACHE.set_file_id_for_name(doc.filename, sent.document.file_id)
-                CACHE.set_file_id_for_drive_id(doc.drive_file_id, sent.document.file_id)
-        await status_message.delete()
+        services = [service] if service else await discover_outline_services_async()
+        missing = []
+        for current in services:
+            if not await _send_outline(message, current, kind):
+                missing.append(current.label or "this week")
+        if len(missing) == len(services):
+            await status_message.edit_text(
+                f"Sorry, I couldn't find the sermon outline ({kind_label})."
+            )
+        elif missing:
+            await status_message.edit_text(
+                f"No {kind_label} outline is up yet for: {', '.join(missing)}."
+            )
+        else:
+            await status_message.delete()
     except Exception as exc:
-        logger.error("Error in outline_doc command: %s", exc)
+        logger.error("Error sending the %s outline: %s", kind, exc)
         await status_message.edit_text(
             "An error occurred while fetching the outline. Please try again later."
         )
+
+
+async def _send_outline(message, service: OutlineService, kind: str) -> bool:
+    """Send the PDF or Word outline from one gathering's folder; False when the folder has none."""
+    if kind == "pdf":
+        doc = await resolve_outline_pdf(CACHE, service.folder_url)
+    else:
+        doc = await resolve_outline_doc(CACHE, service.folder_url)
+    if not doc.found:
+        return False
+
+    markup = ebook_button(outline_source_id(service.slug))
+    if doc.telegram_ref:
+        await message.reply_document(document=doc.telegram_ref, caption=service.title, reply_markup=markup)
+    elif doc.filepath:
+        with open(doc.filepath, "rb") as fh:
+            sent = await message.reply_document(
+                document=fh, filename=doc.filename, caption=service.title, reply_markup=markup
+            )
+        if sent.document and doc.drive_file_id:
+            CACHE.set_file_id_for_drive_id(doc.drive_file_id, sent.document.file_id)
+    return True
 
 
 async def report(update: Update, context: ContextTypes.DEFAULT_TYPE):

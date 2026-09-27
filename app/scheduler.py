@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 from telegram.ext import Application, ContextTypes
 
 from app.admin import send_to_admin
-from app.bot import refresh_drive_link_commands
+from app.bot import outline_commands, refresh_drive_link_commands
 
 LOGGER = logging.getLogger(__name__)
 
@@ -45,7 +45,8 @@ async def auto_refresh(context: ContextTypes.DEFAULT_TYPE) -> None:
             await send_to_admin(context.bot, "Auto-refresh failed three times. Run /refresh manually.")
         return
 
-    summary = ", ".join(f"/{link.command}" for link in links) or "no Drive-backed links found"
+    commands = [link.command for link in links] + [command.command for command in outline_commands(context.application)]
+    summary = ", ".join(f"/{command}" for command in commands) or "no Drive-backed links found"
     LOGGER.info("Auto-refresh complete: %s", summary)
     await send_to_admin(context.bot, f"Auto-refresh complete: {summary}")
 

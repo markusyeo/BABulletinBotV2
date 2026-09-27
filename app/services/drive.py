@@ -90,12 +90,15 @@ def fetch_drive_folder(url: Optional[str] = None) -> str:
     return response.text
 
 
-def extract_outline_file_id(html_content: str, mime_type_fragment: str) -> Optional[str]:
-    """Parse the Drive folder HTML and return the first file id matching a mime fragment."""
+FOLDER_MIME = "application/vnd.google-apps.folder"
+
+
+def list_folder_items(html_content: str) -> list[tuple[str, str, str]]:
+    """Parse a public Drive folder page into (file id, name, mime type) tuples."""
     match = re.search(r"window\['_DRIVE_ivd'\] = '([^']+)'", html_content)
     if not match:
         LOGGER.error("Could not find _DRIVE_ivd in HTML")
-        return None
+        return []
 
     encoded_json = match.group(1)
     try:
@@ -103,15 +106,24 @@ def extract_outline_file_id(html_content: str, mime_type_fragment: str) -> Optio
         data = json.loads(decoded_json)
     except Exception as exc:
         LOGGER.error("Error decoding Drive JSON: %s", exc)
-        return None
+        return []
 
     if not data or not isinstance(data, list) or not data[0]:
-        return None
+        return []
 
-    for item in data[0]:
-        # item[0] = file id, item[3] = mime type
-        if len(item) > 3 and mime_type_fragment in item[3]:
-            return item[0]
+    # item[0] = file id, item[2] = name, item[3] = mime type
+    return [
+        (item[0], item[2], item[3])
+        for item in data[0]
+        if len(item) > 3 and isinstance(item[3], str)
+    ]
+
+
+def extract_outline_file_id(html_content: str, mime_type_fragment: str) -> Optional[str]:
+    """Parse the Drive folder HTML and return the first file id matching a mime fragment."""
+    for file_id, _name, mime_type in list_folder_items(html_content):
+        if mime_type_fragment in mime_type:
+            return file_id
     return None
 
 

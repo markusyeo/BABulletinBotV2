@@ -11,6 +11,13 @@ from app.services.drive import (
     fetch_drive_folder,
 )
 from app.services.linktree import DriveLink, fetch_linktree, find_songbook_link
+from app.services.outlines import (
+    OUTLINE_REGISTRY_KEY,
+    OUTLINE_SOURCE_PREFIX,
+    OutlineService,
+    discover_outline_services,
+    outline_source_id,
+)
 
 DRIVE_LINK_REGISTRY_KEY = "drive_links"
 DRIVE_PREFIX = "d:"
@@ -28,7 +35,6 @@ class EbookSource:
 
 STATIC_SOURCES = [
     EbookSource("songbook", "Songbook"),
-    EbookSource("outline", "Sermon Outline"),
 ]
 
 
@@ -39,7 +45,11 @@ def drive_source_id(command: str) -> str:
 def list_sources(application) -> list[EbookSource]:
     registry: dict[str, DriveLink] = application.bot_data.get(DRIVE_LINK_REGISTRY_KEY, {})
     dynamic = [EbookSource(drive_source_id(command), link.label) for command, link in registry.items()]
-    return dynamic + STATIC_SOURCES
+    outlines: dict[str, OutlineService] = application.bot_data.get(OUTLINE_REGISTRY_KEY, {})
+    outline_sources = [
+        EbookSource(outline_source_id(service.slug), service.title) for service in outlines.values()
+    ] or [EbookSource("outline", "Sermon Outline")]
+    return dynamic + STATIC_SOURCES + outline_sources
 
 
 def source_label(application, source_id: str) -> str:
@@ -68,16 +78,34 @@ async def fetch_source_file(application, source_id: str) -> str:
         path, _ = await asyncio.to_thread(download_songbook, url)
         return path
 
-    if source_id == "outline":
+    if source_id == "outline" or source_id.startswith(OUTLINE_SOURCE_PREFIX):
+        slug = source_id[len(OUTLINE_SOURCE_PREFIX):] if source_id != "outline" else ""
+        service = await _find_outline_service(application, slug)
         # The DOCX carries real headings, lists and verse superscripts; the PDF is only a fallback.
-        html = await asyncio.to_thread(fetch_drive_folder)
+        html = await asyncio.to_thread(fetch_drive_folder, service.folder_url)
         file_id = (
             extract_outline_file_id(html, "wordprocessingml")
             or extract_outline_file_id(html, "application/pdf")
         )
         if not file_id:
-            raise SourceUnavailable("No sermon outline (DOCX or PDF) was found in the Drive folder.")
-        path, _ = await asyncio.to_thread(download_outline, file_id, filename_prefix="outline")
+            raise SourceUnavailable(f"No {service.title} (DOCX or PDF) was found in the Drive folder.")
+        prefix = f"outline_{slug}" if slug else "outline"
+        path, _ = await asyncio.to_thread(download_outline, file_id, filename_prefix=prefix)
         return path
 
     raise SourceUnavailable("Unknown file.")
+
+
+async def _find_outline_service(application, slug: str) -> OutlineService:
+    services: dict[str, OutlineService] = application.bot_data.get(OUTLINE_REGISTRY_KEY, {})
+    service = services.get(slug)
+    if service is None:
+        live = await asyncio.to_thread(discover_outline_services)
+        service = next((candidate for candidate in live if candidate.slug == slug), None)
+    if service is None:
+        if not slug:
+            raise SourceUnavailable(
+                "Each gathering has its own outline now. Send /ebook and pick the one you want."
+            )
+        raise SourceUnavailable("That outline is no longer in the Drive folder. Send /ebook to pick again.")
+    return service

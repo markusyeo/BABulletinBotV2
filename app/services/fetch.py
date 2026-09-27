@@ -56,8 +56,8 @@ async def resolve_drive_document(drive_link: DriveLink, cache: CacheStore) -> Do
     return Document(filepath=filepath, filename=filename, drive_file_id=file_id)
 
 
-async def resolve_outline_pdf(cache: CacheStore) -> Document:
-    html = await asyncio.to_thread(fetch_drive_folder)
+async def resolve_outline_pdf(cache: CacheStore, folder_url: Optional[str] = None) -> Document:
+    html = await asyncio.to_thread(fetch_drive_folder, folder_url)
     file_id = extract_outline_file_id(html, "application/pdf")
     if not file_id:
         return Document()
@@ -74,8 +74,8 @@ async def resolve_outline_pdf(cache: CacheStore) -> Document:
     return Document(telegram_ref=direct_link, source_url=view_url)
 
 
-async def resolve_outline_doc(cache: CacheStore) -> Document:
-    html = await asyncio.to_thread(fetch_drive_folder)
+async def resolve_outline_doc(cache: CacheStore, folder_url: Optional[str] = None) -> Document:
+    html = await asyncio.to_thread(fetch_drive_folder, folder_url)
     file_id = extract_outline_file_id(html, "wordprocessingml")
     if not file_id:
         file_id = extract_outline_file_id(html, "msword")

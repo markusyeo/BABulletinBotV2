@@ -6,7 +6,7 @@ A Telegram bot for Bukit Arang Church. It reads the church Linktree and Google D
 
 - Builds one command per Google Drive file on the Linktree, so `/bulletin` (or `/bulletin_830_1045` and `/bulletin_2pm` when the church splits them) always points at the current week.
 - Refreshes those commands every Saturday night at 00:00 Singapore time (i.e. as Sunday begins). Nobody has to run `/refresh` on Sunday morning.
-- Serves the songbook from Linktree and the sermon outline (PDF or Word) from the Drive folder.
+- Serves the songbook from Linktree and the sermon outline (PDF or Word) from the Drive folder. When the folder has a subfolder per gathering (`830/1045am`, `2pm`), each gets its own commands, rebuilt on the same weekly refresh.
 - Converts PDFs and Word files to EPUB or KEPUB sized for a chosen Kobo, Kindle-class reader or phone. See [E-reader downloads](#e-reader-downloads).
 - Caches downloads and Telegram file ids so repeat requests are instant.
 - Forwards `/report` messages, error alerts and refresh summaries to the maintainer's chat.
@@ -17,8 +17,9 @@ A Telegram bot for Bukit Arang Church. It reads the church Linktree and Google D
 | --- | --- |
 | `/bulletin`, `/bulletin_830_1045`, `/bulletin_2pm` | This week's bulletin PDF. Which commands exist depends on what Linktree lists. |
 | `/songbook` | The Open Worship songbook PDF. |
-| `/outline` | This week's sermon outline as PDF. |
-| `/outline_doc` | This week's sermon outline as Word. |
+| `/outline` | This week's sermon outline as PDF, one per gathering. |
+| `/outline_doc` | This week's sermon outline as Word, one per gathering. |
+| `/outline_830_1045am`, `/outline_doc_830_1045am`, `/outline_2pm`, `/outline_doc_2pm` | One gathering's outline. Which commands exist depends on the subfolders in the outline folder. |
 | `/ebook` | Pick a file, a device and a format; receive an EPUB or KEPUB. |
 | `/report <note>` | Send a bug report to the maintainer. Without a note, the bot asks for one. |
 | `/help` | What the bot does and how to use it. |
@@ -28,7 +29,7 @@ A Telegram bot for Bukit Arang Church. It reads the church Linktree and Google D
 
 Every PDF or Word file the bot sends has an "E-reader version" button under it. That button, or `/ebook`, runs three steps, each an inline keyboard that edits the same message:
 
-1. File: any bulletin on Linktree, the songbook, or the sermon outline. The outline is converted from the Word file, which keeps headings, lists and verse numbers; the PDF is used only when the folder has no Word file.
+1. File: any bulletin on Linktree, the songbook, or each gathering's sermon outline. The outline is converted from the Word file, which keeps headings, lists and verse numbers; the PDF is used only when the folder has no Word file.
 2. Device: Kobo Clara BW, Clara Colour, Libra Colour, Sage, Elipsa 2E, a Kindle-class reader, or a phone. Images are resampled to that screen width and turned greyscale for black-and-white readers. The bot remembers the choice and offers it first next time.
 3. Format, Kobo only: KEPUB for Kobo's own reader, or standard EPUB. Other devices skip this step and get EPUB.
 
@@ -54,7 +55,7 @@ Fill in `.env`:
 | --- | --- | --- |
 | `TELEGRAM_BOT_TOKEN` | yes | Token from BotFather. |
 | `LINKTREE_URL` | yes | The church Linktree, for example `https://linktr.ee/bukitarangchurch`. |
-| `OUTLINE_FOLDER_URL` | yes | Google Drive folder that holds the sermon outlines. |
+| `OUTLINE_FOLDER_URL` | yes | Google Drive folder that holds the sermon outlines, either directly or in one subfolder per gathering. |
 | `ADMIN_CHAT_ID` | no | Your own chat with the bot. Receives `/report` messages, error alerts and weekly refresh summaries, and is the only chat allowed to run `/refresh`. Send the bot any message, then read the id from `getUpdates`, or set it after the first `/ebook` use from `bulletin_cache/bot_state.pickle`. |
 | `TIMEZONE` | no | Zone for the weekly refresh. Default `Asia/Singapore`. |
 | `AUTO_REFRESH_TIME` | no | Weekly refresh time as `HH:MM`, applied on Sunday. Default `00:00`. A failed run retries three times, ten minutes apart. |
