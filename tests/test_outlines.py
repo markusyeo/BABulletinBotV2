@@ -31,19 +31,16 @@ def test_discover_split_folder_sorts_morning_first(monkeypatch):
     html = _folder_html([("pm", "2pm", FOLDER_MIME), ("am", "830/1045am", FOLDER_MIME)])
     monkeypatch.setattr(outlines, "fetch_drive_folder", lambda url=None: html)
     services = outlines.discover_outline_services("https://root")
-    assert [(s.slug, s.pdf_command, s.doc_command) for s in services] == [
-        ("830_1045am", "outline_830_1045am", "outline_doc_830_1045am"),
-        ("2pm", "outline_2pm", "outline_doc_2pm"),
-    ]
+    assert [(s.slug, s.label) for s in services] == [("830_1045am", "8.30/10.45am"), ("2pm", "2pm")]
     assert services[0].folder_url == "https://drive.google.com/drive/folders/am"
     assert services[1].title == "Sermon Outline (2pm)"
 
 
-def test_discover_flat_folder_keeps_plain_commands(monkeypatch):
+def test_discover_flat_folder_is_one_gathering(monkeypatch):
     html = _folder_html([("f1", "outline.docx", DOCX)])
     monkeypatch.setattr(outlines, "fetch_drive_folder", lambda url=None: html)
     [service] = outlines.discover_outline_services("https://root")
-    assert (service.slug, service.pdf_command, service.folder_url) == ("", "outline", "https://root")
+    assert (service.slug, service.title, service.folder_url) == ("", "Sermon Outline", "https://root")
     assert outlines.outline_source_id(service.slug) == "outline"
 
 

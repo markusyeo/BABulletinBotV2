@@ -26,3 +26,38 @@ def test_admin_chat_detection(monkeypatch):
     assert admin.admin_chat_id() is None and not admin.is_admin_chat(1)
     monkeypatch.setenv("ADMIN_CHAT_ID", "273374275")
     assert admin.is_admin_chat(273374275) and not admin.is_admin_chat(5)
+
+
+def _app_with_links(*labels):
+    from app.services.linktree import DriveLink, _slugify_command
+
+    class App:
+        bot_data = {DRIVE_LINK_REGISTRY_KEY: {
+            _slugify_command(label): DriveLink(_slugify_command(label), label, f"https://drive.google.com/file/d/{i}")
+            for i, label in enumerate(labels)
+        }}
+    return App()
+
+
+def test_split_bulletins_share_one_command():
+    from app.bot import bulletin_links, file_command_summary, gathering_label, other_drive_links
+
+    app = _app_with_links("8.30/10.45am Gathering Bulletin", "2pm Gathering Bulletin", "Baptism Testimonies")
+    assert [gathering_label(link.label) for link in bulletin_links(app)] == ["8.30/10.45am", "2pm"]
+    assert [link.command for link in other_drive_links(app)] == ["baptism_testimonies"]
+    assert file_command_summary(app)[:2] == ["/bulletin - 8.30/10.45am, 2pm", "/baptism_testimonies - Baptism Testimonies"]
+
+
+def test_single_bulletin_label_falls_back_to_full_name():
+    from app.bot import gathering_label
+
+    assert gathering_label("Sunday Gathering Bulletin") == "Sunday Gathering Bulletin"
+
+
+def test_picker_callback_data_fits_telegram_limit():
+    from app.bot import BULLETIN_KIND, PICK_ALL, _picker
+
+    markup = _picker(BULLETIN_KIND, [("2pm", "x" * 32)])
+    data = [row[0].callback_data for row in markup.inline_keyboard]
+    assert data == [f"pk|b|{'x' * 32}", f"pk|b|{PICK_ALL}"]
+    assert all(len(d.encode()) <= 64 for d in data)

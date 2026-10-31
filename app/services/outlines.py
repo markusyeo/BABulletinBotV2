@@ -19,14 +19,6 @@ class OutlineService:
     folder_url: str
 
     @property
-    def pdf_command(self) -> str:
-        return f"outline_{self.slug}" if self.slug else "outline"
-
-    @property
-    def doc_command(self) -> str:
-        return f"outline_doc_{self.slug}" if self.slug else "outline_doc"
-
-    @property
     def title(self) -> str:
         return f"Sermon Outline ({self.label})" if self.label else "Sermon Outline"
 
@@ -41,7 +33,7 @@ def _folder_url(folder_id: str) -> str:
 
 
 def service_slug(folder_name: str) -> str:
-    """"830/1045am" -> "830_1045am" and "2pm" -> "2pm", matching /bulletin_830_1045am and /bulletin_2pm."""
+    """"830/1045am" -> "830_1045am" and "2pm" -> "2pm"; picker buttons and ebook source ids carry it."""
     name = folder_name.lower().replace(".", "")
     slug = re.sub(r"[^a-z0-9]+", "_", name).strip("_")
     return slug[:20]
